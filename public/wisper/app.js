@@ -6,6 +6,34 @@ const $ = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => [...(root || document).querySelectorAll(sel)];
 const app = $('#app');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ======================= نوافذ داخلية أنيقة (بدل نوافذ المتصفح) ======================= */
+function uiModal(opts) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.className = 'ui-modal-ov';
+    const okLabel = opts.okLabel || 'تمام';
+    const cancelLabel = opts.cancelLabel || 'إلغاء';
+    ov.innerHTML = `
+      <div class="ui-modal" role="dialog" aria-modal="true">
+        ${opts.emoji ? `<div class="ui-modal-emoji">${opts.emoji}</div>` : ''}
+        ${opts.title ? `<h3 class="ui-modal-title">${esc(opts.title)}</h3>` : ''}
+        <div class="ui-modal-body">${esc(opts.message || '')}</div>
+        <div class="ui-modal-actions">
+          ${opts.cancel === false ? '' : `<button class="btn ghost big ui-cancel">${esc(cancelLabel)}</button>`}
+          <button class="btn ${opts.danger ? 'coral' : 'primary'} big ui-ok">${esc(okLabel)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const done = v => { ov.remove(); resolve(v); };
+    ov.querySelector('.ui-ok').onclick = () => done(true);
+    const cx = ov.querySelector('.ui-cancel'); if (cx) cx.onclick = () => done(false);
+    ov.onclick = e => { if (e.target === ov && opts.cancel !== false) done(false); };
+    requestAnimationFrame(() => ov.classList.add('show'));
+  });
+}
+function uiConfirm(message, opts) { return uiModal(Object.assign({ message, danger: true }, opts || {})); }
+function uiAlert(message, opts) { return uiModal(Object.assign({ message, cancel: false }, opts || {})); }
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -125,12 +153,12 @@ document.addEventListener('click', async (e) => {
   if (!t) return;
   if (t.id === 'help-btn') { Snd.ensure(); showHelp(); }
   else if (t.id === 'home-btn') {
-    if (S.save && !confirm('ترجع للمّة؟ (مكانك في الروم محفوظ وتقدر ترجعله)')) return;
+    if (S.save && !await uiConfirm('ترجع للمّة؟ مكانك في الروم محفوظ وتقدر ترجعله', { emoji: '🏠', title: 'رجوع للمّة', okLabel: 'ارجع', cancelLabel: 'فضّل هنا' })) return;
     location.href = '/';
   }
   else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
   else if (t.id === 'leave-fab') {
-    if (!confirm('تخرج من الروم؟ 🤔 سكورك هيفضل محسوب في النتيجة النهائية')) return;
+    if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب في النتيجة النهائية', { emoji: '🚪', title: 'خروج من الروم', okLabel: 'اخرج', cancelLabel: 'استنى' })) return;
     await act('leave'); leaveLocal();
   }
 });
@@ -286,9 +314,9 @@ function renderLobby(st) {
     $$('[data-plus]').forEach(b => b.onclick = () => { const k = b.dataset.plus; act('setSettings', { settings: { [k]: Math.min(10, st.settings[k] + 1) } }); });
     $$('[data-min]').forEach(b => b.onclick = () => { const k = b.dataset.min; act('setSettings', { settings: { [k]: Math.max(0, st.settings[k] - 1) } }); });
     $('#start-btn').onclick = () => { Snd.play('q'); act('startGame'); };
-    $$('.kick').forEach(b => b.onclick = () => { if (confirm('متأكد عايز تطرده؟')) act('kick', { playerId: b.dataset.kick }); });
+    $$('.kick').forEach(b => b.onclick = async () => { if (await uiConfirm('متأكد عايز تطرده من الروم؟', { emoji: '👋', title: 'طرد لاعب', okLabel: 'اطرده' })) act('kick', { playerId: b.dataset.kick }); });
   }
-  $('#leave-btn').onclick = async () => { if (confirm('تخرج من الروم؟')) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 /* ======================= عناصر مشتركة ======================= */
@@ -300,13 +328,18 @@ function topicBanner(st) {
   const src = SRC_TAG[st.topicSource] || '';
   return `<div class="topic-banner"><div class="tl">عنوان الجولة ${src ? '· ' + src : ''}</div><div class="tx">${esc(st.topic)}</div></div>`;
 }
+function dotsRow(done, total) {
+  let out = '';
+  for (let i = 0; i < total; i++) out += `<span class="pdot ${i < done ? 'on' : ''}"></span>`;
+  return out || '<span class="muted small">—</span>';
+}
 function avatarsOf(st, ids) {
   return (ids || []).map(id => { const p = st.players.find(x => x.id === id); return p ? `<span class="a" title="${esc(p.name)}">${p.avatar}</span>` : ''; }).join('');
 }
 function hostForce(st, label) {
   return st.you.isHost ? `<button class="btn sm ghost mt" id="force-btn" style="width:100%">⏭️ ${label}</button>` : '';
 }
-function bindForce() { const f = $('#force-btn'); if (f) f.onclick = () => { if (confirm('تعدّي المرحلة دي؟ (للطوارئ لو حد نايم 😴)')) act('forceContinue'); }; }
+function bindForce() { const f = $('#force-btn'); if (f) f.onclick = async () => { if (await uiConfirm('تعدّي المرحلة دي؟ (للطوارئ لو حد نايم 😴)', { emoji: '⏭️', okLabel: 'عدّي', danger: false })) act('forceContinue'); }; }
 
 let timerRAF = null;
 function stopTimer() { if (timerRAF) cancelAnimationFrame(timerRAF); timerRAF = null; }
@@ -421,8 +454,8 @@ function renderWrite(st) {
       <div class="center muted small mt" id="w-status">${submitted ? 'اتسلمت ✅ — تقدر تعدلها لحد ما الكل يخلص' : 'محدش هيشوف إجابتك غير وقت التخمين'}</div>
     </div>
     <div class="card tight center">
-      <div class="muted small">سلّم <b id="w-count">${st.submittedIds.length}</b> من ${st.players.filter(p => p.connected).length}</div>
-      <div class="answered-strip" id="w-strip">${avatarsOf(st, st.submittedIds)}</div>
+      <div class="muted small">سلّم <b id="w-count">${st.submittedCount}</b> من ${st.writeTotal} <span class="muted small">(مين؟ سرّي 🤫)</span></div>
+      <div class="dots-row" id="w-dots">${dotsRow(st.submittedCount, st.writeTotal)}</div>
     </div>
     ${hostForce(st, 'كفاية كده وابدأوا التخمين')}`;
   bindHeader(); bindForce();
@@ -434,8 +467,8 @@ function renderWrite(st) {
   };
 }
 function patchWrite(st) {
-  const c = $('#w-count'); if (c) c.textContent = st.submittedIds.length;
-  const s = $('#w-strip'); if (s) s.innerHTML = avatarsOf(st, st.submittedIds);
+  const c = $('#w-count'); if (c) c.textContent = st.submittedCount;
+  const d = $('#w-dots'); if (d) d.innerHTML = dotsRow(st.submittedCount, st.writeTotal);
   if (st.yourAnswer != null) {
     const b = $('#ans-ok'); if (b) b.textContent = '🔁 عدّل وسلّم تاني';
     const ws = $('#w-status'); if (ws) ws.textContent = 'اتسلمت ✅ — تقدر تعدلها لحد ما الكل يخلص';
@@ -482,8 +515,8 @@ function renderGuess(st) {
       </div>
     </div>
     <div class="card tight center">
-      <div class="muted small">اختاروا: <span id="g-n">${st.pickedIds.length}</span>/${st.eligibleCount}</div>
-      <div class="answered-strip" id="g-strip">${avatarsOf(st, st.pickedIds)}</div>
+      <div class="muted small">اختاروا: <span id="g-n">${st.pickedCount}</span>/${st.eligibleCount} <span class="muted small">(مين؟ سرّي 🤫)</span></div>
+      <div class="dots-row" id="g-strip">${dotsRow(st.pickedCount, st.eligibleCount)}</div>
       <div class="muted small">أول ما الكل يختار → الإجابة اللي بعدها لوحدها ⬅️</div>
     </div>
     ${hostForce(st, 'عدّي الإجابة دي')}`;
@@ -496,8 +529,8 @@ function renderGuess(st) {
   });
 }
 function patchGuess(st) {
-  const n = $('#g-n'); if (n) n.textContent = st.pickedIds.length;
-  const s = $('#g-strip'); if (s) s.innerHTML = avatarsOf(st, st.pickedIds);
+  const n = $('#g-n'); if (n) n.textContent = st.pickedCount;
+  const s = $('#g-strip'); if (s) s.innerHTML = dotsRow(st.pickedCount, st.eligibleCount);
   $$('#roster .roster-btn').forEach(x => x.classList.toggle('on', st.yourPick === x.dataset.r));
 }
 
@@ -618,39 +651,45 @@ function renderGameover(st) {
   bindHeader();
   const ab = $('#again-btn');
   if (ab) ab.onclick = () => act('playAgain');
-  $('#leave-btn').onclick = async () => { if (confirm('تخرج من الروم؟')) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 /* ======================= الهيلب ======================= */
-const WISPER_HELP = `
-<div style="text-align:start">
-  <div class="center"><img src="/img/wisper.webp" alt="" style="width:110px;height:auto;filter:drop-shadow(0 6px 14px #0009)"></div>
-  <h2 class="display" style="color:var(--teal);text-align:center;margin:6px 0 2px">حبر سري</h2>
-  <div class="center muted small" style="margin-bottom:14px">إزاي بنلعب؟</div>
-  <p style="margin:0 0 10px"><b>1️⃣ الروم:</b> من 3 لـ 15 لاعب — كود أو QR.</p>
-  <p style="margin:0 0 10px"><b>2️⃣ الهوست بيظبط بس:</b> عدد الجولات من كل نوع — ✍️ واحد يكتب العنوان، 🗳️ تصويت بين 3، 🎲 عشوائي من بنك 200 — والترتيب بيتخلط لوحده. <b style="color:var(--teal)">ومفيش هوست بيدوس حاجة بعد كده.</b></p>
-  <p style="margin:0 0 10px"><b>3️⃣ جولات الكتابة سرّية:</b> لاعب عشوائي بيكتب العنوان و<b style="color:var(--brass-hi)">محدش عارف مين هو</b> 🤫</p>
-  <p style="margin:0 0 10px"><b>4️⃣ كل جولة:</b> الكل يكتب إجابته في السر — <b>ومينفعش اتنين يكتبوا نفس الكلام بالظبط</b>.</p>
-  <p style="margin:0 0 10px"><b>5️⃣ التخمين واحدة واحدة:</b> إجابة تظهر → الكل يخمّن مين كتبها → أول ما الكل يختار تيجي اللي بعدها لوحدها. لو الإجابة بتاعتك؟ استنى وشوفهم محتارين 😏. <b>كل اسم ينفع مرة واحدة</b> في الجولة.</p>
-  <p style="margin:0"><b>6️⃣ النقط والنهاية:</b> تخمينة صح = 100. وفي الآخر جوايز 🏆🕵️🎭 ومراجعة كل الجولات ✅❌.</p>
-</div>`;
+const WISPER_STEPS = [
+  ['🏠', 'اعملوا روم', 'واحد يدوس «اعمل روم» ويطلعله كود + QR. الباقي (من 3 لـ 15) يدخلوا بالكود أو الـQR من موبايلهم. محتاجين 3 على الأقل — التخمين بين اتنين مش لعبة 😄'],
+  ['⚙️', 'الهوست يظبّط الجولات', 'الهوست بس بيحدد <span class="hl">عدد الجولات من كل نوع</span>: ✍️ حد يكتب العنوان، 🗳️ تصويت بين 3 عناوين، 🎲 عنوان عشوائي من بنك 200. الترتيب بيتخلط لوحده — و<span class="hl">مفيش هوست بيدوس بعد كده</span>، كله ماشي أوتوماتيك.'],
+  ['🤫', 'العنوان السري', 'كل جولة ليها عنوان (سؤال يخص الشلة). في جولات الكتابة، <span class="hl">لاعب عشوائي بيكتب العنوان ومحدش يعرف مين هو</span> — لا دلوقتي ولا في الآخر خالص.'],
+  ['🖊️', 'اكتب إجابتك في السر', 'العنوان بيظهر، وكل واحد بيكتب إجابته <span class="hl">وهي مخفية عن الكل</span>. حتى مين سلّم ومين لأ سرّي — عشان محدش يستنتج حاجة. <span class="warn">مينفعش اتنين يكتبوا نفس الكلام بالظبط.</span>'],
+  ['🕵️', 'خمّنوا واحدة واحدة', 'أول ما الكل يسلّم، الإجابات بتظهر متخلطة — بس <span class="hl">وحدة ورا التانية</span>. كل إجابة: خمّن مين كتبها. <span class="hl">كل اسم ينفع مرة واحدة</span> في الجولة. أول ما الكل يختار، تيجي اللي بعدها لوحدها.'],
+  ['😏', 'ولو الإجابة بتاعتك؟', 'لما تيجي إجابتك انت، مبتخمّنش — بتقعد تتفرج عليهم وهما محتارين بيدوّروا عليك 🎭'],
+  ['🏆', 'النقط والنهاية', 'كل تخمينة صح = 100 نقطة. في الآخر: ترتيب + جوايز (🏆 بطل اللمّة، 🕵️ المخبر اللي خمّن أكتر، 🎭 الحبر السري اللي محدش عرفه، 📖 الكتاب المفتوح) + مراجعة كل الجولات.'],
+];
 function showHelp() {
-  let ov = $('#help-ov');
-  if (!ov) {
-    ov = document.createElement('div');
-    ov.id = 'help-ov';
-    ov.style.cssText = 'position:fixed;inset:0;background:#000c;z-index:200;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto';
-    document.body.appendChild(ov);
-  }
-  ov.innerHTML = `<div class="card" style="max-width:520px;width:100%;max-height:92vh;overflow:auto">
-    ${WISPER_HELP}
-    <label class="row mt muted small" style="gap:8px;cursor:pointer"><input type="checkbox" id="help-off" style="width:18px;height:18px"> متظهرش تاني</label>
-    <button class="btn primary big mt" id="help-ok">تمام، يلا نلعب 🚀</button>
-    <button class="btn ghost big mt" id="help-skip">تخطي</button>
-  </div>`;
+  const ov = document.createElement('div');
+  ov.className = 'help-ov';
+  ov.innerHTML = `
+    <div class="help-card">
+      <div class="help-hero">
+        <img src="/img/wisper.webp" alt="">
+        <h2>حبر سري</h2>
+        <div class="sub">اكتبها في السر.. وخمّن مين كتب إيه 🕵️</div>
+      </div>
+      <div class="help-body">
+        ${WISPER_STEPS.map(([e, t, d]) => `
+          <div class="help-step">
+            <div class="help-num">${e}</div>
+            <div><h4>${t}</h4><p>${d}</p></div>
+          </div>`).join('')}
+      </div>
+      <div class="help-foot">
+        <label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label>
+        <button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
   const close = () => { if ($('#help-off') && $('#help-off').checked) LS.set('lamma_help_off_wisper', true); ov.remove(); };
   $('#help-ok').onclick = close;
-  $('#help-skip').onclick = close;
+  ov.onclick = e => { if (e.target === ov) close(); };
 }
 
 /* ======================= البداية ======================= */

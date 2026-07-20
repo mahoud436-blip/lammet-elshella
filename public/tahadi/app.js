@@ -6,6 +6,34 @@ const $ = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => [...(root || document).querySelectorAll(sel)];
 const app = $('#app');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ======================= نوافذ داخلية أنيقة (بدل نوافذ المتصفح) ======================= */
+function uiModal(opts) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.className = 'ui-modal-ov';
+    const okLabel = opts.okLabel || 'تمام';
+    const cancelLabel = opts.cancelLabel || 'إلغاء';
+    ov.innerHTML = `
+      <div class="ui-modal" role="dialog" aria-modal="true">
+        ${opts.emoji ? `<div class="ui-modal-emoji">${opts.emoji}</div>` : ''}
+        ${opts.title ? `<h3 class="ui-modal-title">${esc(opts.title)}</h3>` : ''}
+        <div class="ui-modal-body">${esc(opts.message || '')}</div>
+        <div class="ui-modal-actions">
+          ${opts.cancel === false ? '' : `<button class="btn ghost big ui-cancel">${esc(cancelLabel)}</button>`}
+          <button class="btn ${opts.danger ? 'coral' : 'primary'} big ui-ok">${esc(okLabel)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const done = v => { ov.remove(); resolve(v); };
+    ov.querySelector('.ui-ok').onclick = () => done(true);
+    const cx = ov.querySelector('.ui-cancel'); if (cx) cx.onclick = () => done(false);
+    ov.onclick = e => { if (e.target === ov && opts.cancel !== false) done(false); };
+    requestAnimationFrame(() => ov.classList.add('show'));
+  });
+}
+function uiConfirm(message, opts) { return uiModal(Object.assign({ message, danger: true }, opts || {})); }
+function uiAlert(message, opts) { return uiModal(Object.assign({ message, cancel: false }, opts || {})); }
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -143,12 +171,12 @@ document.addEventListener('click', async (e) => {
   if (!t) return;
   if (t.id === 'help-btn') { Snd.ensure(); showHelp(); }
   else if (t.id === 'home-btn') {
-    if (S.save && !confirm('ترجع للمّة؟ (مكانك في الروم محفوظ وتقدر ترجعله)')) return;
+    if (S.save && !await uiConfirm('ترجع للمّة؟ مكانك في الروم محفوظ وتقدر ترجعله', { emoji: '🏠', title: 'رجوع للمّة', okLabel: 'ارجع', cancelLabel: 'فضّل هنا' })) return;
     location.href = '/';
   }
   else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
   else if (t.id === 'leave-fab') {
-    if (!confirm('تخرج من الروم؟ 🤔 سكورك هيفضل محسوب في النتيجة النهائية')) return;
+    if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب في النتيجة النهائية', { emoji: '🚪', title: 'خروج من الروم', okLabel: 'اخرج', cancelLabel: 'استنى' })) return;
     await act('leave'); leaveLocal();
   }
 });
@@ -348,9 +376,9 @@ function renderLobby(st) {
     $('#qpc-plus').onclick = () => act('setSettings', { settings: { qPerCat: Math.min(10, st.settings.qPerCat + 1) } });
     $$('.chip[data-time]').forEach(el => el.onclick = () => act('setSettings', { settings: { qTime: parseInt(el.dataset.time, 10) } }));
     $('#start-btn').onclick = () => { Snd.play('q'); act('startWriting'); };
-    $$('.kick').forEach(b => b.onclick = () => { if (confirm('متأكد عايز تطرده؟')) act('kick', { playerId: b.dataset.kick }); });
+    $$('.kick').forEach(b => b.onclick = async () => { if (await uiConfirm('متأكد عايز تطرده من الروم؟', { emoji: '👋', title: 'طرد لاعب', okLabel: 'اطرده' })) act('kick', { playerId: b.dataset.kick }); });
   }
-  $('#leave-btn').onclick = async () => { if (confirm('تخرج من الروم؟')) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 /* ======================= مرحلة تجهيز الأسئلة ======================= */
@@ -456,14 +484,14 @@ function renderWriting(st) {
     S.slots[i].filled = null; saveSlots(S.st); renderWriting(S.st);
   });
   $$('[data-swap]').forEach(b => b.onclick = () => drawInto(parseInt(b.dataset.swap, 10)));
-  $$('[data-burn]').forEach(b => b.onclick = () => {
+  $$('[data-burn]').forEach(b => b.onclick = async () => {
     const i = parseInt(b.dataset.burn, 10);
-    if (!confirm('السؤال ده محسوب من البنك ومش هيرجع. هتكتب سؤال بنفسك بداله؟')) return;
+    if (!await uiConfirm('السؤال ده محسوب من البنك ومش هيرجع. هتكتب سؤال بنفسك بداله؟', { emoji: '✍️', title: 'اكتب بدال منه', okLabel: 'أيوة اكتب', cancelLabel: 'خليه' })) return;
     S.slots[i].filled = null; saveSlots(S.st);
     openSelf(S.st, i, null);
   });
   $('#done-btn').onclick = submitAll;
-  $('#leave-btn').onclick = async () => { if (confirm('تخرج؟ أسئلتك هتضيع')) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 function patchWritingLive(st) {
@@ -481,7 +509,7 @@ async function drawInto(slotIdx) {
   const used = slot.dr || 0;
   if (used >= 3) return toast('خلصت الـ3 محاولات للخانة دي ✍️', 'err');
   const left = 3 - used;
-  if (!used && !confirm(`🎲 هيطلعلك سؤال عشوائي من «${slot.catName}» بإجابته. ليك ${left} محاولات للخانة دي، وأي سؤال يظهر بيتحذف من بنك الروم. نسحب؟`)) return;
+  if (!used && !await uiConfirm(`هيطلعلك سؤال عشوائي من «${slot.catName}» بإجابته. ليك ${left} محاولات للخانة دي، وأي سؤال يظهر بيتحذف من بنك الروم نهائي.`, { emoji: '🎲', title: 'سحب من البنك', okLabel: 'اسحب', cancelLabel: 'لأ' })) return;
   const r = await act('bankDraw', { cat: slot.cat });
   if (r.ok) {
     Snd.play('ok');
@@ -678,7 +706,7 @@ function renderQuiz(st) {
   const nb = $('#next-btn');
   if (nb) nb.onclick = () => act('next');
 }
-function bindSkip() { const sb = $('#skip-btn'); if (sb) sb.onclick = () => { if (confirm('تخطي السؤال ده وكشف الإجابة؟')) act('skipQuestion'); }; }
+function bindSkip() { const sb = $('#skip-btn'); if (sb) sb.onclick = async () => { if (await uiConfirm('تتخطى السؤال ده وتكشف الإجابة؟', { emoji: '⏭️', okLabel: 'تخطي' })) act('skipQuestion'); }; }
 function answeredAvatars(st) {
   const q = st.question;
   return q.answeredIds.map(id => { const p = st.players.find(x => x.id === id); return p ? `<span class="a" title="${esc(p.name)}">${p.avatar}</span>` : ''; }).join('');
@@ -779,7 +807,7 @@ function renderResults(st) {
   bindHeader();
   const ab = $('#again-btn');
   if (ab) ab.onclick = () => { LS.del('tahadi_slots_' + st.code); S.slots = []; S.slotsSig = ''; act('playAgain'); };
-  $('#leave-btn').onclick = async () => { if (confirm('تخرج من الروم؟')) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🏠', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 /* ======================= البداية ======================= */
@@ -796,35 +824,40 @@ function renderResults(st) {
 })();
 
 /* ======================= هيلب اللعبة + زرار اللمّة ======================= */
-const TAHADI_HELP = `
-<div style="text-align:start">
-  <div class="center"><img src="/img/asal.webp" alt="" style="width:100px;height:auto;filter:drop-shadow(0 6px 14px #0009)"></div>
-  <h2 class="display" style="color:var(--brass-hi);text-align:center;margin:6px 0 2px">اسأل واستفيد</h2>
-  <div class="center muted small" style="margin-bottom:14px">كل جولة بتطلع منها بمعلومات جديدة 💡</div>
-  <p style="margin:0 0 10px"><b>1️⃣ الروم:</b> واحد يعمل روم والباقي يدخلوا بالكود أو الـQR (من 2 لـ 12).</p>
-  <p style="margin:0 0 10px"><b>2️⃣ الهوست بيظبط بس:</b> كام سؤال في كل كاتيجوري × أنهي كاتيجوريز (مثلاً 2×5 = 10 لكل لاعب) ووقت السؤال.</p>
-  <p style="margin:0 0 10px"><b>3️⃣ كل واحد يجهّز أسئلته:</b> يكتب سؤال معلومات + 3 اختيارات ويعلّم الصح — <b style="color:var(--coral)">والتزم بنفس الكاتيجوري اللي انت فيها</b> — أو 🎲 يسحب من بنك الـ1000 سؤال <b>بإجابته</b>.</p>
-  <p style="margin:0 0 10px"><b>🎲 مش عاجبك السؤال؟</b> بدّله لحد <b>3 محاولات للخانة</b>. وأي سؤال يظهر لأي حد بيتحذف من بنك الروم نهائي — مفيش تكرار.</p>
-  <p style="margin:0 0 10px"><b>4️⃣ اللعب:</b> السؤال بيظهر للكل ما عدا صاحبه. صح = 100 نقطة + لحد 50 بونص سرعة.</p>
-  <p style="margin:0 0 10px"><b>⏱️ حد اتأخر؟</b> الهوست يقدر يبدأ — واللي المتأخر خلّصه بيتحسب والباقي بيتكمّل من البنك تلقائي.</p>
-  <p style="margin:0"><b>5️⃣ النهاية:</b> بوديوم وجوايز 🏆🎯⚡🃏 ومراجعة كل سؤال: مين جاوب صح ✅ ومين غلط ❌.</p>
-</div>`;
+const ASAL_STEPS = [
+  ['🏠', 'اعملوا روم', 'واحد يدوس «اعمل روم» ويطلعله كود من 4 أرقام + QR. الباقي (من 2 لـ 12) يكتبوا اسمهم ويدخلوا بالكود أو يصوّروا الـQR من موبايلهم — مفيش أي حاجة بتتنزّل.'],
+  ['⚙️', 'الهوست يظبّط الجولة', 'الهوست بس بيحدد <span class="hl">كام سؤال في كل كاتيجوري</span> و<span class="hl">أنهي كاتيجوريز</span> من الـ10 (رياضة، أفلام، تاريخ، علوم...). يعني 2 في 5 كاتيجوري = 10 أسئلة لكل واحد. وبيحدد وقت السؤال. وبكده دوره خلص — مش بيكتب أسئلة ولا بيسوق اللعبة.'],
+  ['✍️', 'كل واحد يجهّز أسئلته', 'كل لاعب بيملا خاناته بنفسه: يكتب سؤال معلومات + 3 اختيارات ويعلّم الصح. <span class="warn">مهم: التزم بنفس الكاتيجوري بتاعة الخانة</span> — لو الخانة «رياضة» اكتب سؤال رياضة.'],
+  ['🎲', 'مش لاقي سؤال؟ اسحب من البنك', 'بدل ما تكتب، اسحب سؤال جاهز <span class="hl">بإجابته</span> من بنك فيه 1000 سؤال. مش عاجبك؟ <span class="hl">بدّله لحد 3 محاولات</span>. أي سؤال يظهر لأي حد بيتشال من بنك الروم للأبد — فمفيش سؤال بيتكرر مع اتنين.'],
+  ['🎯', 'اللعب والنقط', 'لما الكل يجهّز، الأسئلة بتتقلب على الكل <span class="hl">ما عدا صاحب السؤال</span> (بيتفرج بس 😏). كل إجابة صح = 100 نقطة + لحد 50 بونص لو كنت سريع. اللي يجمع أكتر يكسب.'],
+  ['👀', 'اللعب النضيف', 'فوق فيه شريط بأيقونة كل لاعب. اللي يطلّع اللعبة ويفتح حاجة تانية وهو بيجاوب بتنوّر عليه <span class="warn">❗ حمرا قدام الكل</span> — فمفيش غش. وتقدر تخرج بزرار 🚪 أي وقت وسكورك بيفضل محسوب.'],
+  ['🏆', 'النهاية', 'بوديوم وترتيب كامل + جوايز (بطل الشلة، القنّاص 🎯، الصاروخ ⚡، المُحيِّر 🃏) + مراجعة كل سؤال: مين جاوب صح ✅ ومين غلط ❌ — عشان تطلعوا بمعلومة من كل جولة.'],
+];
 function showHelp() {
-  let ov = $('#help-ov');
-  if (!ov) {
-    ov = document.createElement('div');
-    ov.id = 'help-ov';
-    ov.style.cssText = 'position:fixed;inset:0;background:#000c;z-index:200;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto';
-    document.body.appendChild(ov);
-  }
-  ov.innerHTML = `<div class="card" style="max-width:520px;width:100%;max-height:92vh;overflow:auto">
-    ${TAHADI_HELP}
-    <label class="row mt muted small" style="gap:8px;cursor:pointer"><input type="checkbox" id="help-off" style="width:18px;height:18px"> متظهرش تاني</label>
-    <button class="btn primary big mt" id="help-ok">تمام، يلا نلعب 🚀</button>
-    <button class="btn ghost big mt" id="help-skip">تخطي</button>
-  </div>`;
+  const ov = document.createElement('div');
+  ov.className = 'help-ov';
+  ov.innerHTML = `
+    <div class="help-card">
+      <div class="help-hero">
+        <img src="/img/asal.webp" alt="">
+        <h2>اسأل واستفيد</h2>
+        <div class="sub">اسأل.. جاوب.. واطلع من كل جولة بمعلومة 💡</div>
+      </div>
+      <div class="help-body">
+        ${ASAL_STEPS.map(([e, t, d]) => `
+          <div class="help-step">
+            <div class="help-num">${e}</div>
+            <div><h4>${t}</h4><p>${d}</p></div>
+          </div>`).join('')}
+      </div>
+      <div class="help-foot">
+        <label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label>
+        <button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
   const close = () => { if ($('#help-off') && $('#help-off').checked) LS.set('lamma_help_off_tahadi', true); ov.remove(); };
   $('#help-ok').onclick = close;
-  $('#help-skip').onclick = close;
+  ov.onclick = e => { if (e.target === ov) close(); };
 }
 setTimeout(() => { if (!S.save && !LS.get('lamma_help_off_tahadi', false)) showHelp(); }, 350);

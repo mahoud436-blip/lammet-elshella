@@ -105,7 +105,10 @@ function viewFor(room, p) {
   }
   if (room.phase === 'write') {
     st.yourAnswer = room.writeSet.has(p.token) ? room.writeSet.get(p.token) : null;
-    st.submittedIds = [...room.writeSet.keys()].map(t => (room.players.get(t) || {}).id).filter(Boolean);
+    st.youSubmitted = room.writeSet.has(p.token);
+    // الغموض: مفيش أسماء مين سلّم — عدد بس عشان محدش يستنتج
+    st.submittedCount = [...room.writeSet.keys()].filter(t => room.players.has(t)).length;
+    st.writeTotal = connectedPlayers(room).length;
   }
   if (room.phase === 'guess') {
     const mine = room.guesses.get(p.token) || new Map();
@@ -118,7 +121,7 @@ function viewFor(room, p) {
     st.yourGuesses = {};
     for (const [aid, tok] of mine) { const w = nameOf(room, tok); st.yourGuesses[aid] = w.id; }
     st.yourPick = cur && mine.has(cur.id) ? (nameOf(room, mine.get(cur.id)) || {}).id : null;
-    st.pickedIds = cur ? allPlayers(room).filter(x => x.token !== cur.owner && (room.guesses.get(x.token) || new Map()).has(cur.id)).map(x => x.id) : [];
+    st.pickedCount = cur ? allPlayers(room).filter(x => x.token !== cur.owner && (room.guesses.get(x.token) || new Map()).has(cur.id)).length : 0;
     st.eligibleCount = cur ? allPlayers(room).filter(x => x.token !== cur.owner).length : 0;
     st.needCount = room.answers.filter(a => a.owner !== p.token).length;
   }

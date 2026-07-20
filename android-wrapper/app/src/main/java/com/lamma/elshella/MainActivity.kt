@@ -7,9 +7,12 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.webkit.*
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : AppCompatActivity() {
 
@@ -24,12 +27,28 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             window.statusBarColor = Color.parseColor("#101A2B")
             window.navigationBarColor = Color.parseColor("#101A2B")
         }
-        setContentView(R.layout.activity_main)
+
         webView = findViewById(R.id.webView)
+
+        // الحل النهائي لمشكلة "اللعبة بتخش فوق شريط الإشعارات":
+        // بنحسب مساحة شريط الحالة + شريط التنقل ونعملها padding للـ WebView
+        // فالمحتوى بيقف عند الحواف بدل ما يتخبى تحت الشريط (شغال على كل الموبايلات وأندرويد 15).
+        val root = findViewById<View>(R.id.root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            webView.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+
         setupWebView()
         loadGame()
     }
@@ -59,16 +78,14 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             mediaPlaybackRequiresUserGesture = false
         }
+        webView.setBackgroundColor(Color.parseColor("#101A2B"))
         webView.webChromeClient = WebChromeClient()
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                if (request?.isForMainFrame == true) {
-                    view?.loadUrl("file:///android_asset/www/offline.html")
-                }
+                if (request?.isForMainFrame == true) view?.loadUrl("file:///android_asset/www/offline.html")
             }
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
-                // خليك جوه اللعبة: نفس الدومين أو ملفات محلية
                 return !(url.startsWith("file://") || url.startsWith(REMOTE_URL))
             }
         }
@@ -84,10 +101,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class Bridge {
-        @JavascriptInterface
-        fun retry() { runOnUiThread { loadGame() } }
-        @JavascriptInterface
-        fun exitApp() { runOnUiThread { finish() } }
+        @JavascriptInterface fun retry() { runOnUiThread { loadGame() } }
+        @JavascriptInterface fun exitApp() { runOnUiThread { finish() } }
     }
 
     override fun onResume() { super.onResume(); webView.onResume() }
