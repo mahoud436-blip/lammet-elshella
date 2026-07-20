@@ -21,7 +21,7 @@ function toast(msg, kind) {
 }
 const SHAPES = ['▲', '◆', '●'];
 const CH_CLASS = ['cA', 'cB', 'cC'];
-const AVATARS = ['🦁','🐼','🦊','🐸','🐙','🦄','🐯','🐨','🦉','🐺','🐵','🦅','🐢','🦂','🐪','🦈','🐝','🦜','🐊','🦔','🐳','🦋','🐞','🦕'];
+const AVATARS = ['🦅','🛡️','⚔️','🏆','🎯','🧠','⚡','🔥','👑','🚀','💎','🏹','♟️','🎓','⚙️','🔭','📚','🧭','🥇','🗺️','🏛️','⭐','🌋','🔱'];
 const ALL_CATS = [
   ['movies', '🎬', 'أفلام ومسلسلات'], ['anime', '🍥', 'أنمي وكرتون'], ['hist_islam', '🕌', 'تاريخ إسلامي'],
   ['hist_ar', '🏺', 'تاريخ مصر والعرب'], ['geo_ar', '🗺️', 'جغرافيا عربية'], ['geo_world', '🌍', 'جغرافيا العالم'],
@@ -127,14 +127,48 @@ function leaveLocal() {
 function header(sub) {
   return `<div class="bunting"></div>
   <div class="top">
-    <img src="./logo.svg" alt="">
-    <div><div class="title display">تحدي الشلة</div><div class="sub">${esc(sub || 'مين فيكم اللي فاهم في التانيين؟ 👀')}</div></div>
+    <img src="/img/asal-sm.png" alt="">
+    <div><div class="title display">اسأل واستفيد</div><div class="sub">${esc(sub || 'اسأل.. جاوب.. واطلع من كل جولة بمعلومة 💡')}</div></div>
     <button class="btn sm ghost" id="help-btn" style="margin-inline-start:auto">؟</button>
     <button class="btn sm ghost" id="home-btn">🏠</button>
     <button class="btn sm ghost" id="mute-btn">${Snd.muted ? '🔇' : '🔊'}</button>
-  </div>`;
+  </div>
+  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">🚪</button>' : ''}
+  <div id="presence-bar" class="presence-bar hidden"></div>`;
 }
-function bindHeader() { const b = $('#mute-btn'); if (b) b.onclick = () => { Snd.toggle(); b.textContent = Snd.muted ? '🔇' : '🔊'; }; }
+function bindHeader() {}
+/* تفويض عام: الأزرار دي شغالة في كل الشاشات مهما كان ترتيب التحميل */
+document.addEventListener('click', async (e) => {
+  const t = e.target.closest('#help-btn,#home-btn,#mute-btn,#leave-fab');
+  if (!t) return;
+  if (t.id === 'help-btn') { Snd.ensure(); showHelp(); }
+  else if (t.id === 'home-btn') {
+    if (S.save && !confirm('ترجع للمّة؟ (مكانك في الروم محفوظ وتقدر ترجعله)')) return;
+    location.href = '/';
+  }
+  else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
+  else if (t.id === 'leave-fab') {
+    if (!confirm('تخرج من الروم؟ 🤔 سكورك هيفضل محسوب في النتيجة النهائية')) return;
+    await act('leave'); leaveLocal();
+  }
+});
+/* مراقبة الحضور: لو حد نزّل اللعبة تحت أو فتح حاجة تانية — الكل يشوف ❗ */
+function sendPresence(away) { if (S.save) act('presence', { away: !!away }); }
+document.addEventListener('visibilitychange', () => sendPresence(document.visibilityState !== 'visible'));
+window.addEventListener('blur', () => sendPresence(true));
+window.addEventListener('focus', () => sendPresence(false));
+function updPresence(st) {
+  const el = $('#presence-bar');
+  if (!el) return;
+  const show = st && (st.phase === 'writing' || st.phase === 'quiz');
+  el.classList.toggle('hidden', !show);
+  if (!show) return;
+  el.innerHTML = st.players.map(p => {
+    const cls = p.left ? 'gone' : (!p.connected ? 'off' : (p.away ? 'away' : 'here'));
+    const badge = p.left ? '🚪' : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
+    return `<span class="pv ${cls}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
+  }).join('');
+}
 
 /* ======================= شاشة البداية ======================= */
 function renderHome(prefillCode) {
@@ -151,7 +185,7 @@ function renderHome(prefillCode) {
           <input class="field" id="name-in" maxlength="16" placeholder="مثلًا: ميدو 😎" value="${esc(S.name)}">
         </div>
       </div>
-      <button class="btn primary big mt" id="create-btn">🎪 اعمل روم جديد</button>
+      <button class="btn primary big mt" id="create-btn">💡 اعمل روم جديد</button>
       <div class="or">أو</div>
       <input class="field code-input" id="code-in" inputmode="numeric" maxlength="4" placeholder="• • • •" value="${esc(code)}">
       <button class="btn teal big mt" id="join-btn">🚪 ادخل الروم</button>
@@ -194,6 +228,7 @@ function renderHome(prefillCode) {
 function render() {
   const st = S.st;
   if (!st) return;
+  updPresence(st);
   const key = st.phase + '|' + (st.question ? st.question.sub + '|' + st.question.i : '') + '|' + (st.you.ready ? 'r' : 'w');
   if (st.phase === 'writing') {
     ensureSlots(st);
@@ -243,7 +278,7 @@ function renderLobby(st) {
           ${isHost && !p.isHost ? `<button class="kick" data-kick="${p.id}">✕</button>` : ''}
           <div class="av">${p.avatar}</div>
           <div class="nm">${esc(p.name)}${p.id === me.id ? ' (انت)' : ''}</div>
-          <div class="st">${p.connected ? 'موجود ✅' : 'اتفصل ⏳'}</div>
+          <div class="st">${p.left ? 'خرج 🚪' : (p.connected ? 'موجود ✅' : 'اتفصل ⏳')}</div>
         </div>`).join('')}
       </div>
     </div>
@@ -333,7 +368,7 @@ function ensureSlots(st) {
     const tmpl = planSlots(st);
     S.slots = tmpl.map((t, i) => {
       const sv = saved && saved.sig === sig && saved.slots[i];
-      return Object.assign({}, t, { filled: sv ? sv.filled : null, noBank: sv ? !!sv.noBank : false });
+      return Object.assign({}, t, { filled: sv ? sv.filled : null, dr: sv ? (sv.dr || 0) : 0 });
     });
     S.slotsSig = sig;
   }
@@ -342,8 +377,8 @@ function ensureSlots(st) {
     for (const d of st.yourDrawn) {
       const already = S.slots.some(s => s.filled && s.filled.source === 'bank' && s.filled.bankId === d.bankId);
       if (already) continue;
-      const empty = S.slots.find(s => s.cat === d.cat && !s.filled && !s.noBank);
-      if (empty) empty.filled = { source: 'bank', bankId: d.bankId, q: d.q, choices: d.choices, a: d.a };
+      const empty = S.slots.find(s => s.cat === d.cat && !s.filled);
+      if (empty) { empty.filled = { source: 'bank', bankId: d.bankId, q: d.q, choices: d.choices, a: d.a }; if (!empty.dr) empty.dr = 1; }
     }
   }
   // بعد "أعدّل": رجّع الأسئلة المتسلّمة من السيرفر
@@ -356,7 +391,15 @@ function ensureSlots(st) {
   }
   saveSlots(st);
 }
-function saveSlots(st) { LS.set('tahadi_slots_' + st.code, { sig: S.slotsSig, slots: S.slots.map(s => ({ filled: s.filled, noBank: s.noBank })) }); }
+let draftT = null;
+function pushDraft() {
+  clearTimeout(draftT);
+  draftT = setTimeout(() => {
+    if (!S.save || !S.st || S.st.phase !== 'writing') return;
+    act('syncDraft', { slots: S.slots.map(s => s.filled ? Object.assign({ cat: s.cat }, s.filled) : null) });
+  }, 400);
+}
+function saveSlots(st) { LS.set('tahadi_slots_' + st.code, { sig: S.slotsSig, slots: S.slots.map(s => ({ filled: s.filled, dr: s.dr || 0 })) }); pushDraft(); }
 function filledCount() { return S.slots.filter(s => s.filled).length; }
 
 function renderWriting(st) {
@@ -372,7 +415,7 @@ function renderWriting(st) {
       <div class="progress-cats mt">
         ${st.plan.map(c => { const g = (byCat[c.id] || []); const d = g.filter(x => x[0].filled).length; return `<span class="chip ${d === c.count ? 'on' : ''}">${c.icon} ${esc(c.name)} ${d}/${c.count}</span>`; }).join('')}
       </div>
-      <div class="muted small mt">🎲 السحب من البنك <b>نهائي</b>: السؤال اللي يطلعلك بإجابته يبقى بتاعك ويتحذف من البنك — مفيش تقليب!</div>
+      <div class="muted small mt">🎲 السحب بيجيب سؤال عشوائي <b>بإجابته</b> — مش عاجبك؟ <b>بدّله لحد 3 محاولات للخانة</b>. وأي سؤال يظهر بيتحذف من بنك الروم نهائي.</div>
       <div class="muted small" id="live-note"></div>
     </div>
     ${st.plan.map(c => `
@@ -380,20 +423,21 @@ function renderWriting(st) {
         <h3>${c.icon} ${esc(c.name)} <span class="muted small">(فاضل في البنك: <b data-bankleft="${c.id}">${st.bankLeft ? st.bankLeft[c.id] : '—'}</b>)</span></h3>
         ${(byCat[c.id] || []).map(([s, i]) => s.filled ? `
           <div class="slot done">
-            <div class="src-tag">${s.filled.source === 'bank' ? '🎲 من البنك — نهائي 🔒' : '✍️ من دماغك'}</div>
+            <div class="src-tag">${s.filled.source === 'bank' ? '🎲 من البنك' + ((s.dr || 1) >= 3 ? ' — خلصت المحاولات 🔒' : ' — محاولة ' + (s.dr || 1) + ' من 3') : '✍️ من دماغك'}</div>
             <div class="qtext">${esc(s.filled.q)}</div>
             <div class="mini-ch">${s.filled.choices.map((ch, ci) => `<span class="${ci === s.filled.a ? 'ok' : ''}">${SHAPES[ci]} ${esc(ch)} ${ci === s.filled.a ? '✅' : ''}</span>`).join('')}</div>
             <div class="row mt">
               ${s.filled.source === 'self'
                 ? `<button class="btn sm" data-edit="${i}">✏️ تعديل</button>
                    <button class="btn sm ghost" data-del="${i}">🗑️ حذف</button>`
-                : `<button class="btn sm ghost" data-burn="${i}">✍️ استبدله بسؤال من عندي</button>`}
+                : `${(s.dr || 1) < 3 ? `<button class="btn sm teal" data-swap="${i}">🎲 بدّله (فاضل ${3 - (s.dr || 1)})</button>` : ''}
+                   <button class="btn sm ghost" data-burn="${i}">✍️ اكتب بدال منه</button>`}
             </div>
           </div>` : `
           <div class="slot">
-            <div class="muted small">${s.noBank ? 'استخدمت سحبة البنك للخانة دي — اكتب بنفسك ✍️' : 'خانة فاضية'}</div>
+            <div class="muted small">${(s.dr || 0) >= 3 ? 'خلصت محاولات البنك للخانة دي — اكتب بنفسك ✍️' : 'خانة فاضية'}</div>
             <div class="row mt">
-              ${s.noBank ? '' : `<button class="btn teal grow" data-bank="${i}">🎲 عشوائي من البنك</button>`}
+              ${(s.dr || 0) >= 3 ? '' : `<button class="btn teal grow" data-bank="${i}">🎲 من البنك${s.dr ? ' (فاضل ' + (3 - s.dr) + ')' : ''}</button>`}
               <button class="btn coral grow" data-self="${i}">✍️ اكتب بنفسك</button>
             </div>
           </div>`).join('')}
@@ -411,10 +455,11 @@ function renderWriting(st) {
     const i = parseInt(b.dataset.del, 10);
     S.slots[i].filled = null; saveSlots(S.st); renderWriting(S.st);
   });
+  $$('[data-swap]').forEach(b => b.onclick = () => drawInto(parseInt(b.dataset.swap, 10)));
   $$('[data-burn]').forEach(b => b.onclick = () => {
     const i = parseInt(b.dataset.burn, 10);
-    if (!confirm('السؤال ده اتحسب عليك من البنك خلاص ومش هيرجع تاني. هتكتب سؤال بنفسك بداله؟')) return;
-    S.slots[i].filled = null; S.slots[i].noBank = true; saveSlots(S.st);
+    if (!confirm('السؤال ده محسوب من البنك ومش هيرجع. هتكتب سؤال بنفسك بداله؟')) return;
+    S.slots[i].filled = null; saveSlots(S.st);
     openSelf(S.st, i, null);
   });
   $('#done-btn').onclick = submitAll;
@@ -433,16 +478,19 @@ function patchWritingLive(st) {
 /* السحب الإجباري: سؤال عشوائي بإجابته — نهائي */
 async function drawInto(slotIdx) {
   const slot = S.slots[slotIdx];
-  if (!confirm(`🎲 هيطلعلك سؤال عشوائي من «${slot.catName}» بإجابته، وهيبقى نهائي — مفيش تبديل ولا تقليب. نسحب؟`)) return;
+  const used = slot.dr || 0;
+  if (used >= 3) return toast('خلصت الـ3 محاولات للخانة دي ✍️', 'err');
+  const left = 3 - used;
+  if (!used && !confirm(`🎲 هيطلعلك سؤال عشوائي من «${slot.catName}» بإجابته. ليك ${left} محاولات للخانة دي، وأي سؤال يظهر بيتحذف من بنك الروم. نسحب؟`)) return;
   const r = await act('bankDraw', { cat: slot.cat });
   if (r.ok) {
     Snd.play('ok');
+    slot.dr = used + 1;
     slot.filled = { source: 'bank', bankId: r.item.bankId, q: r.item.q, choices: r.item.choices, a: r.item.a };
     saveSlots(S.st);
-    toast('ده سؤالك من البنك — اتحذف من البنك للباقيين 🔒', 'ok');
+    toast(slot.dr >= 3 ? 'دي آخر محاولة — السؤال ده ثابت خلاص 🔒' : `تمام! لو مش عاجبك تقدر تبدّله (فاضل ${3 - slot.dr}) 🎲`, 'ok');
     renderWriting(S.st);
   }
-  // لو خلص البنك أو الرصيد: التوست ظهر من act
 }
 
 function openSelf(st, slotIdx, prefill) {
@@ -461,7 +509,7 @@ function renderEditor(st) {
     <div class="card">
       <span class="chip on">${catLabel}</span>
       <div class="mt"><label class="muted small">السؤال</label>
-        <textarea class="field" id="q-in" maxlength="200" placeholder="مثال: مين فينا اللي بيخاف من الصراصير؟ 😂">${esc(b.q)}</textarea></div>
+        <textarea class="field" id="q-in" maxlength="200" placeholder="مثال: إيه أكبر كوكب في المجموعة الشمسية؟">${esc(b.q)}</textarea></div>
       <div class="muted small mt">الاختيارات التلاتة — ودوس على الشكل عشان تعلّم الإجابة الصح</div>
       ${[0, 1, 2].map(i => `
         <div class="choice-edit">
@@ -517,12 +565,13 @@ function renderWaiting(st) {
       <div class="waiting-list">
         ${st.players.map(p => `
           <div class="wrow"><span>${p.avatar}</span><span>${esc(p.name)}${p.id === me.id ? ' (انت)' : ''}</span>
-            ${p.ready ? '<span class="ok">جاهز ✅</span>' : (p.connected ? '<span class="wr">بيكتب ✍️</span>' : '<span class="wr">اتفصل ⏳</span>')}
+            ${p.left ? '<span class="wr">خرج 🚪</span>' : (p.ready ? '<span class="ok">جاهز ✅</span>' : (p.connected ? '<span class="wr">بيكتب ✍️</span>' : '<span class="wr">اتفصل ⏳</span>'))}
           </div>`).join('')}
       </div>
     </div>
     <button class="btn teal big" id="edit-btn">✏️ أعدّل أسئلتي</button>
-    ${me.isHost ? `<button class="btn primary big mt" id="force-btn">🚀 ابدأ باللي جاهزين</button>` : ''}
+    ${me.isHost ? `<button class="btn primary big mt" id="force-btn">🚀 ابدأ دلوقتي</button>
+    <div class="center muted small mt">اللي لسه بيكتب: اللي خلّصه هيتحسب والباقي هيتكمّل من البنك تلقائي — محدش بياخد ميزة 😉</div>` : ''}
     `;
   bindHeader();
   $('#edit-btn').onclick = async () => { const r = await act('editQuestions'); if (r.ok) { S.viewKey = ''; render(); } };
@@ -699,7 +748,7 @@ function renderResults(st) {
     </div>
     <div class="card">
       <h3 class="mb">📊 الترتيب</h3>
-      ${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}</span><span class="muted small">(${p.correct}/${p.eligible} صح)</span><span class="sc">${p.score}</span></div>`).join('')}
+      ${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">🚪 خرج</span>' : ''}</span><span class="muted small">(${p.correct}/${p.eligible} صح)</span><span class="sc">${p.score}</span></div>`).join('')}
     </div>
     <div class="card">
       <h3 class="mb">🔍 مين شاطر في مين؟</h3>
@@ -749,14 +798,16 @@ function renderResults(st) {
 /* ======================= هيلب اللعبة + زرار اللمّة ======================= */
 const TAHADI_HELP = `
 <div style="text-align:start">
-  <h2 class="display" style="color:var(--brass-hi);text-align:center;margin-bottom:4px">🎪 تحدي الشلة</h2>
-  <div class="center muted small" style="margin-bottom:14px">إزاي بنلعب؟</div>
+  <div class="center"><img src="/img/asal.webp" alt="" style="width:100px;height:auto;filter:drop-shadow(0 6px 14px #0009)"></div>
+  <h2 class="display" style="color:var(--brass-hi);text-align:center;margin:6px 0 2px">اسأل واستفيد</h2>
+  <div class="center muted small" style="margin-bottom:14px">كل جولة بتطلع منها بمعلومات جديدة 💡</div>
   <p style="margin:0 0 10px"><b>1️⃣ الروم:</b> واحد يعمل روم والباقي يدخلوا بالكود أو الـQR (من 2 لـ 12).</p>
-  <p style="margin:0 0 10px"><b>2️⃣ الهوست بيظبط بس:</b> كام سؤال في كل كاتيجوري × أنهي كاتيجوريز (مثلاً 2×5 = 10 أسئلة لكل لاعب) ووقت السؤال.</p>
-  <p style="margin:0 0 10px"><b>3️⃣ كل واحد يجهّز أسئلته:</b> يا يكتب السؤال و3 اختيارات ويعلّم الصح — <b style="color:var(--coral)">والتزم بنفس الكاتيجوري اللي انت فيها</b> — يا يدوس 🎲 يجيله سؤال عشوائي من البنك <b>بإجابته</b>.</p>
-  <p style="margin:0 0 10px"><b>⚠️ السحب نهائي:</b> اللي يطلعلك من البنك بيتحسب عليك ويتحذف من البنك للعبة كلها — مفيش تقليب!</p>
+  <p style="margin:0 0 10px"><b>2️⃣ الهوست بيظبط بس:</b> كام سؤال في كل كاتيجوري × أنهي كاتيجوريز (مثلاً 2×5 = 10 لكل لاعب) ووقت السؤال.</p>
+  <p style="margin:0 0 10px"><b>3️⃣ كل واحد يجهّز أسئلته:</b> يكتب سؤال معلومات + 3 اختيارات ويعلّم الصح — <b style="color:var(--coral)">والتزم بنفس الكاتيجوري اللي انت فيها</b> — أو 🎲 يسحب من بنك الـ1000 سؤال <b>بإجابته</b>.</p>
+  <p style="margin:0 0 10px"><b>🎲 مش عاجبك السؤال؟</b> بدّله لحد <b>3 محاولات للخانة</b>. وأي سؤال يظهر لأي حد بيتحذف من بنك الروم نهائي — مفيش تكرار.</p>
   <p style="margin:0 0 10px"><b>4️⃣ اللعب:</b> السؤال بيظهر للكل ما عدا صاحبه. صح = 100 نقطة + لحد 50 بونص سرعة.</p>
-  <p style="margin:0"><b>5️⃣ النهاية:</b> بوديوم وجوايز 🏆 ومراجعة كل سؤال: مين جاوب صح ✅ ومين غلط ❌.</p>
+  <p style="margin:0 0 10px"><b>⏱️ حد اتأخر؟</b> الهوست يقدر يبدأ — واللي المتأخر خلّصه بيتحسب والباقي بيتكمّل من البنك تلقائي.</p>
+  <p style="margin:0"><b>5️⃣ النهاية:</b> بوديوم وجوايز 🏆🎯⚡🃏 ومراجعة كل سؤال: مين جاوب صح ✅ ومين غلط ❌.</p>
 </div>`;
 function showHelp() {
   let ov = $('#help-ov');
@@ -775,16 +826,5 @@ function showHelp() {
   const close = () => { if ($('#help-off') && $('#help-off').checked) LS.set('lamma_help_off_tahadi', true); ov.remove(); };
   $('#help-ok').onclick = close;
   $('#help-skip').onclick = close;
-}
-{
-  const _bindHeader = bindHeader;
-  bindHeader = function () {
-    _bindHeader();
-    const h = $('#help-btn'); if (h) h.onclick = showHelp;
-    const hm = $('#home-btn'); if (hm) hm.onclick = () => {
-      if (S.save && !confirm('ترجع للمّة؟ (مكانك في الروم محفوظ وتقدر ترجعله)')) return;
-      location.href = '/';
-    };
-  };
 }
 setTimeout(() => { if (!S.save && !LS.get('lamma_help_off_tahadi', false)) showHelp(); }, 350);

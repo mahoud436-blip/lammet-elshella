@@ -148,7 +148,7 @@ async function scenario1_full4players() {
 
   ok((await act(A, 'startWriting')).ok, 'بدء مرحلة الكتابة');
   const st = await waitFor(A, s => s.phase === 'writing');
-  ok(st.drawsLeft === 5, 'رصيد السحب = إجمالي الأسئلة');
+  ok(st.drawsLeft === 15, 'رصيد السحب = 3 محاولات × عدد الأسئلة');
 
   for (const pl of all) {
     const slots = buildSelfSlots(st.plan, pl.name);
@@ -274,8 +274,15 @@ async function scenario3_bank_forced() {
     pDrawn.push(dd.item.bankId);
   }
   await waitFor(H, s => s.bankLeft.mix === 94, 3000, 'بعد 1+5 سحبات: فاضل 94');
+  for (let i = 5; i < 15; i++) {
+    const dd = await act(P, 'bankDraw', { cat: 'mix' });
+    must(dd.ok, 'سحبة تبديل رقم ' + (i + 1));
+    ok(!pDrawn.includes(dd.item.bankId) && dd.item.bankId !== bid, 'التبديل بيجيب جديد دايمًا');
+    pDrawn.push(dd.item.bankId);
+  }
+  await waitFor(H, s => s.bankLeft.mix === 84, 3000, 'بعد 1+15 سحبة: فاضل 84');
   const over = await act(P, 'bankDraw', { cat: 'mix' });
-  ok(!over.ok && /رصيد/.test(over.error || ''), 'رصيد السحب = إجمالي أسئلته (5) وبعدها يترفض');
+  ok(!over.ok && /محاولات/.test(over.error || ''), 'رصيد السحب = 3× أسئلته (15) وبعدها يترفض');
 
   // P ميقدرش يسلّم سؤال اتسحب لـ H
   const stealSlots = buildSelfSlots(st.plan, 'P3x');
@@ -308,14 +315,14 @@ async function scenario3_bank_forced() {
   await waitFor(H, s => s.phase === 'lobby');
   must((await act(H, 'startWriting')).ok, 'كتابة تاني');
   st = await waitFor(H, s => s.phase === 'writing' && s.bankLeft);
-  ok(st.bankLeft.mix === 94, 'المحذوف (6) فاضل محذوف بين الجولات — ' + st.bankLeft.mix);
+  ok(st.bankLeft.mix === 84, 'المحذوف (16) فاضل محذوف بين الجولات — ' + st.bankLeft.mix);
   const seen = new Set([bid, ...pDrawn]);
   for (let i = 0; i < 5; i++) {
     const dd = await act(H, 'bankDraw', { cat: 'mix' });
     must(dd.ok, 'سحبة جولة 2 رقم ' + (i + 1));
     ok(!seen.has(dd.item.bankId), 'ولا سؤال قديم رجع تاني');
   }
-  await waitFor(H, s => s.bankLeft.mix === 89, 3000, 'استمرارية العداد: 89');
+  await waitFor(H, s => s.bankLeft.mix === 79, 3000, 'استمرارية العداد: 79');
   console.log('  ✅ سيناريو 3 تمام');
 }
 
@@ -363,10 +370,66 @@ async function scenario4_reconnect_kick_migrate() {
 
   must((await act(H, 'leave')).ok, 'الهوست خرج');
   const mg = await waitFor(P, s => s.you && s.you.isHost, 4000, 'انتقال الهوست');
-  ok(mg.players.length === 1, 'فاضل لاعب واحد');
+  const hRow = mg.players.find(x => x.id === H.id);
+  ok(mg.players.length === 2 && hRow && hRow.left === true, 'الهوست الخارج فاضل بسكوره ومتعلم عليه 🚪');
   await sleep(150);
   ok(H.events.some(e => e.t === 'left') || H.closed, 'الهوست القديم اتقفل عنده الستريم');
   console.log('  ✅ سيناريو 4 تمام');
+}
+
+/* ============================================================ */
+async function blindRound(players) {
+  const host = players[0];
+  const st = await waitFor(host, s => s.phase === 'quiz' && s.question && s.question.sub === 'answering', 8000, 'answering');
+  const views = [];
+  for (const pl of players) {
+    const v = await waitFor(pl, s => s.question && s.question.i === st.question.i && s.question.sub === 'answering', 4000, 'sync q');
+    views.push([pl, v]);
+  }
+  const ownerPair = views.find(([, v]) => v.question.isYours);
+  if (ownerPair) ok(!(await act(ownerPair[0], 'answer', { choice: 0 })).ok, 'صاحب السؤال ميجاوبش');
+  for (const [pl, v] of views) {
+    if (v.question.isYours) continue;
+    must((await act(pl, 'answer', { choice: 0 })).ok, 'إجابة عمياء ' + pl.name);
+  }
+  await waitFor(host, s => s.question && s.question.i === st.question.i && s.question.sub === 'reveal', 8000, 'reveal');
+  return st.question.i;
+}
+
+async function scenario5_forceComplete() {
+  console.log('▶️ سيناريو 5: الهوست بدأ واللي متأخر اتحسبله اللي خلصه واتكمّل من البنك');
+  const H = await newPlayer('Hf5');
+  const code = H.code;
+  const P = await newPlayer('Pf5', code);
+  must((await act(H, 'setSettings', { settings: { qPerCat: 1, qTime: 0, cats: CATS5 } })).ok, 'إعدادات');
+  must((await act(H, 'startWriting')).ok, 'كتابة');
+  const st = await waitFor(H, s => s.phase === 'writing' && s.bankLeft);
+
+  must((await act(H, 'submitQuestions', { slots: buildSelfSlots(st.plan, 'Hf5') })).ok, 'تسليم الهوست');
+
+  // P كتب سؤالين بنفسه وسحب واحد من البنك.. ومسلّمش
+  const dP = await act(P, 'bankDraw', { cat: 'mix' });
+  must(dP.ok, 'P سحب من البنك');
+  const s1 = selfSlot('movies', 'Pf5', 1);
+  const s2 = selfSlot('anime', 'Pf5', 2);
+  must((await act(P, 'syncDraft', { slots: [s1, s2, { cat: 'mix', source: 'bank', bankId: dP.item.bankId }, null, null] })).ok, 'مزامنة المسودة');
+
+  must((await act(H, 'forceStartQuiz')).ok, 'الهوست بدأ باللي جاهز');
+  await waitFor(H, s => s.phase === 'quiz', 6000, 'الكويز بدأ');
+  must(H.last.question.total === 10, 'الدِك كامل 10 (اتكمّلت أسئلة المتأخر) — لقيت ' + H.last.question.total);
+
+  for (let guard = 0; guard < 12 && H.last.phase !== 'results'; guard++) {
+    const qi = await blindRound([H, P]);
+    must((await act(H, 'next')).ok, 'التالي');
+    await waitFor(H, s => s.phase === 'results' || (s.question && s.question.i > qi), 8000, 'تقدم');
+  }
+  const res = await waitFor(H, s => s.phase === 'results', 6000, 'النتايج');
+  const pRows = res.results.review.filter(q => q.ownerName === 'Pf5');
+  must(pRows.length === 5, 'أسئلة المتأخر = 5 كاملة (لقيت ' + pRows.length + ')');
+  ok(pRows.some(q => q.text === s1.q && !q.fromBank), 'سؤاله المكتوب 1 اتحسب');
+  ok(pRows.some(q => q.text === s2.q && !q.fromBank), 'سؤاله المكتوب 2 اتحسب');
+  ok(pRows.filter(q => q.fromBank).length === 3, 'الباقي (3) اتكمّل من البنك');
+  console.log('  ✅ سيناريو 5 تمام');
 }
 
 /* ============================================================ */
@@ -382,6 +445,7 @@ async function scenario4_reconnect_kick_migrate() {
     await scenario2_timer();
     await scenario3_bank_forced();
     await scenario4_reconnect_kick_migrate();
+    await scenario5_forceComplete();
   } catch (e) {
     failed++;
     console.error('💥 خطأ في الاختبار:', e.message);

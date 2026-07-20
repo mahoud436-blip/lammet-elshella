@@ -9,7 +9,7 @@ const MAX_ROOMS = 300;
 const MAX_PLAYERS = 12;
 const MAX_Q_PER_PLAYER = 20;
 const REVEAL_GRACE = 250;
-const AVATARS = ['🦁','🐼','🦊','🐸','🐙','🦄','🐯','🐨','🦉','🐺','🐵','🦅','🐢','🦂','🐪','🦈','🐝','🦜','🐊','🦔','🐳','🦋','🐞','🦕'];
+const AVATARS = ['🦅','🛡️','⚔️','🏆','🎯','🧠','⚡','🔥','👑','🚀','💎','🏹','♟️','🎓','⚙️','🔭','📚','🧭','🥇','🗺️','🏛️','⭐','🌋','🔱'];
 
 let NET = { ips: [], port: 3000, hosted: false };
 
@@ -44,7 +44,7 @@ function createRoom() {
 function addPlayer(room, name, avatar) {
   const token = rid();
   const p = { token, id: 'p' + (++playerSeq), name, avatar, connected: false, lastSeen: now(), res: null,
-    score: 0, ready: false, slots: null, draws: 0, drawn: new Map() };
+    score: 0, ready: false, slots: null, draws: 0, drawn: new Map(), draftSlots: null, left: false, away: false };
   room.players.set(token, p);
   room.order.push(token);
   if (!room.hostToken) room.hostToken = token;
@@ -70,13 +70,13 @@ function viewFor(room, p) {
     plan: buildPlan(room.settings).map(x => ({ ...BANK.catMeta(x.cat), count: x.count })),
     net: NET, autoStartAt: room.autoStartAt,
     players: allPlayers(room).map(x => ({ id: x.id, name: x.name, avatar: x.avatar, isHost: isHost(room, x),
-      connected: x.connected, score: x.score, ready: x.ready, qDone: x.slots ? x.slots.length : 0 })),
+      connected: x.connected, left: !!x.left, away: !!x.away, score: x.score, ready: x.ready, qDone: x.slots ? x.slots.length : 0 })),
     you: { id: p.id, isHost: isHost(room, p), ready: p.ready, score: p.score },
   };
   if (room.phase === 'writing') {
     st.bankLeft = {};
     for (const c of room.settings.cats) { let free = 0; for (const id of BANK.catIds(c)) if (!room.bankConsumed.has(id)) free++; st.bankLeft[c] = free; }
-    st.drawsLeft = Math.max(0, qTotal(room) - p.draws);
+    st.drawsLeft = Math.max(0, qTotal(room) * 3 - p.draws);
     st.yourSlots = p.slots;
     st.yourDrawn = [...p.drawn.values()];
   }
@@ -122,7 +122,7 @@ function checkAutoStart(room) {
 }
 function startWriting(room) {
   room.phase = 'writing';
-  for (const p of allPlayers(room)) { p.ready = false; p.slots = null; p.draws = 0; p.drawn = new Map(); }
+  for (const p of allPlayers(room)) { p.ready = false; p.slots = null; p.draws = 0; p.drawn = new Map(); p.draftSlots = null; }
   cancelAutoStart(room);
   broadcast(room);
 }
@@ -211,7 +211,7 @@ function finish(room) {
   }
   const ranking = players.slice().sort((a, b) => b.score - a.score).map((p, i) => {
     const s = stats.get(p.token);
-    return { rank: i + 1, id: p.id, name: p.name, avatar: p.avatar, score: p.score, correct: s.correct, eligible: s.eligible, connected: p.connected };
+    return { rank: i + 1, id: p.id, name: p.name, avatar: p.avatar, score: p.score, correct: s.correct, eligible: s.eligible, connected: p.connected, left: !!p.left };
   });
   const awards = [];
   if (ranking.length) awards.push({ icon: '🏆', title: 'بطل الشلة', who: ranking[0].name, detail: ranking[0].score + ' نقطة' });
@@ -256,13 +256,23 @@ function playAgain(room) {
     if (!p || !p.connected) { if (p) room.ghosts.set(tok, { name: p.name, avatar: p.avatar }); room.players.delete(tok); room.order = room.order.filter(t => t !== tok); }
   }
   if (!room.players.has(room.hostToken)) room.hostToken = room.order[0] || null;
-  for (const p of allPlayers(room)) { p.score = 0; p.ready = false; p.slots = null; p.draws = 0; p.drawn = new Map(); }
+  for (const p of allPlayers(room)) { p.score = 0; p.ready = false; p.slots = null; p.draws = 0; p.drawn = new Map(); p.draftSlots = null; }
   room.deck = null; room.qIndex = 0; room.sub = null; room.results = null;
   if (room.qTimer) { clearTimeout(room.qTimer); room.qTimer = null; }
   cancelAutoStart(room);
   room.phase = 'lobby';
   broadcast(room);
 }
+function softLeave(room, p) {
+  p.left = true;
+  if (p.res) { try { sseSend(p.res, { t: 'left' }); p.res.end(); } catch (e) {} }
+  p.res = null; p.connected = false;
+  if (room.hostToken === p.token) { migrateHost(room); }
+  maybeComplete(room);
+  if (room.phase === 'writing') checkAutoStart(room);
+  broadcast(room);
+}
+
 function removePlayer(room, p, kicked) {
   room.ghosts.set(p.token, { name: p.name, avatar: p.avatar });
   if (p.res) { try { sseSend(p.res, { t: kicked ? 'kicked' : 'left' }); p.res.end(); } catch (e) {} }
@@ -286,6 +296,40 @@ function destroyRoom(room) {
   if (room.hostGraceTimer) clearTimeout(room.hostGraceTimer);
   rooms.delete(room.code);
 }
+function autoCompleteSlots(room, p) {
+  const plan = buildPlan(room.settings);
+  const out = [];
+  const usedB = new Set();
+  const drafts = Array.isArray(p.draftSlots) ? p.draftSlots : [];
+  for (const { cat, count } of plan) {
+    const have = [];
+    for (const d of drafts) {
+      if (have.length >= count) break;
+      if (!d || d.cat !== cat) continue;
+      if (d.source === 'bank') {
+        const bid = String(d.bankId || '');
+        const item = p.drawn.get(bid);
+        if (item && item.cat === cat && !usedB.has(bid)) { usedB.add(bid); have.push({ cat, source: 'bank', bankId: bid, q: item.q, choices: item.choices.slice(), a: item.a }); }
+      } else if (d.source === 'self') {
+        const q = clampStr(d.q, 200);
+        const ch = Array.isArray(d.choices) ? d.choices.map(c => clampStr(c, 90)) : [];
+        if (q && ch.length === 3 && ch.every(c => c) && new Set(ch.map(c => c.toLowerCase())).size === 3 && Number.isInteger(d.a) && d.a >= 0 && d.a <= 2)
+          have.push({ cat, source: 'self', q, choices: ch, a: d.a });
+      }
+    }
+    while (have.length < count) {
+      const pool = BANK.catIds(cat).filter(id => !room.bankConsumed.has(id));
+      if (!pool.length) break;
+      const bid = pool[Math.floor(Math.random() * pool.length)];
+      const bq = BANK.get(bid);
+      room.bankConsumed.add(bid);
+      have.push({ cat, source: 'bank', bankId: bid, q: bq.q, choices: bq.choices.slice(), a: bq.a });
+    }
+    out.push(...have.slice(0, count));
+  }
+  return out;
+}
+
 function validateSlots(room, p, slots) {
   if (!Array.isArray(slots)) return { err: 'صيغة غلط' };
   const plan = buildPlan(room.settings);
@@ -376,7 +420,7 @@ module.exports = {
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write('retry: 2000\n\n');
     if (p.res && p.res !== res) { try { p.res.end(); } catch (e) {} }
-    p.res = res; p.connected = true; p.lastSeen = now();
+    p.res = res; p.connected = true; p.lastSeen = now(); p.left = false; p.away = false;
     if (room.hostGraceTimer && room.hostToken === p.token) { clearTimeout(room.hostGraceTimer); room.hostGraceTimer = null; }
     broadcast(room);
     req.on('close', () => {
@@ -431,7 +475,7 @@ module.exports = {
       if (room.phase !== 'writing') return R(400, { ok: false, error: 'مش وقت السحب' });
       const catId = String(b.cat || '');
       if (!room.settings.cats.includes(catId)) return R(400, { ok: false, error: 'كاتيجوري غلط' });
-      if (p.draws >= qTotal(room)) return R(400, { ok: false, error: 'خلّصت رصيد السحب — اكتب الباقي بنفسك ✍️' });
+      if (p.draws >= qTotal(room) * 3) return R(400, { ok: false, error: 'خلّصت كل محاولات السحب — اكتب الباقي بنفسك ✍️' });
       const pool = BANK.catIds(catId).filter(id => !room.bankConsumed.has(id));
       if (!pool.length) return R(200, { ok: false, empty: true, error: 'البنك خلص في الكاتيجوري دي! اكتب بنفسك 😉' });
       const bankId = pool[Math.floor(Math.random() * pool.length)];
@@ -459,9 +503,19 @@ module.exports = {
       broadcast(room);
       return R(200, { ok: true });
     }
+    if (A === 'syncDraft') {
+      if (room.phase === 'writing' && !p.ready) p.draftSlots = Array.isArray(b.slots) ? b.slots.slice(0, 40) : null;
+      return R(200, { ok: true });
+    }
     if (A === 'forceStartQuiz') {
       if (!isHost(room, p)) return R(403, { ok: false, error: 'الهوست بس' });
       if (room.phase !== 'writing') return R(400, { ok: false, error: 'مش في مرحلة الكتابة' });
+      // اللي متأخر: نكمّله — اللي خلصه عنده يتحسب والباقي عشوائي من البنك
+      for (const x of allPlayers(room)) {
+        if (x.ready) continue;
+        const slots = autoCompleteSlots(room, x);
+        if (slots.length) { x.slots = slots; x.ready = true; }
+      }
       if (totalSubmitted(room) < 2) return R(400, { ok: false, error: 'محتاجين على الأقل سؤالين جاهزين' });
       startQuiz(room);
       return R(200, { ok: true });
@@ -502,7 +556,16 @@ module.exports = {
       playAgain(room);
       return R(200, { ok: true });
     }
-    if (A === 'leave') { removePlayer(room, p, false); return R(200, { ok: true }); }
+    if (A === 'leave') {
+      if (room.phase === 'lobby') removePlayer(room, p, false);
+      else softLeave(room, p);
+      return R(200, { ok: true });
+    }
+    if (A === 'presence') {
+      const away = !!b.away;
+      if (p.away !== away) { p.away = away; broadcast(room); }
+      return R(200, { ok: true });
+    }
     return R(400, { ok: false, error: 'أكشن غير معروف' });
   },
 

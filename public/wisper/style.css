@@ -289,3 +289,17 @@ details.review .rv-body{padding:0 12px 12px;border-top:2px dashed var(--line)}
 .pick-row.bad{background:#2c1220;border:1px solid #6b1d3a}
 .owner-chip{display:inline-flex;align-items:center;gap:8px;background:#2a2210;border:2px solid var(--brass);
   border-radius:999px;padding:6px 12px;font-weight:800}
+
+/* ===== شريط علوي أنضف + لوجو صورة + شبكة الأسماء ===== */
+.bunting,.bunting.teal{height:5px;margin:0 -14px 14px;border-radius:0 0 10px 10px;filter:none;opacity:.95;
+  background:linear-gradient(90deg,#c084fc,var(--brass-hi),#8e5bf0)}
+.top img{width:54px;height:54px;object-fit:contain;filter:drop-shadow(0 3px 6px #0008)}
+.roster-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.roster-grid .roster-btn{margin-bottom:0}
+.roster-btn.on{border-color:var(--teal);background:#241645;color:#e6d5ff}
+
+/* ===== زرار الخروج الثابت ===== */
+.leave-fab{position:fixed;bottom:14px;inset-inline-start:14px;z-index:120;width:52px;height:52px;border-radius:50%;
+  border:2px solid var(--line);background:var(--surface);color:var(--ink);font-size:22px;cursor:pointer;
+  box-shadow:0 6px 0 #000a;transition:transform .07s}
+.leave-fab:active{transform:translateY(4px);box-shadow:0 1px 0 #000a}

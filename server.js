@@ -113,7 +113,7 @@ function listen(port, attempt) {
     NET_IPS = localIPs();
     pushNet(port);
     console.log('');
-    console.log('  🎪 لمّة الشلة شغّالة! (تحدي الشلة + حبر سري)');
+    console.log('  🎪 لمّة الشلة شغّالة! (اسأل واستفيد + حبر سري)');
     console.log('  ──────────────────────────────');
     if (HOSTED) {
       console.log('  السيرفر شغّال على بورت ' + port + ' (وضع الاستضافة)');

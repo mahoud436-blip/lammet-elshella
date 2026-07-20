@@ -237,3 +237,26 @@ details.review .rv-body{padding:0 12px 12px;border-top:2px dashed var(--line)}
 @media (prefers-reduced-motion:reduce){
   *{animation:none !important;transition:none !important}
 }
+
+/* ===== شريط علوي أنضف + لوجو صورة ===== */
+.bunting,.bunting.teal{height:5px;margin:0 -14px 14px;border-radius:0 0 10px 10px;filter:none;opacity:.95;
+  background:linear-gradient(90deg,var(--teal),var(--brass-hi),var(--coral))}
+.top img{width:54px;height:54px;object-fit:contain;filter:drop-shadow(0 3px 6px #0008)}
+
+/* ===== زرار الخروج الثابت + شريط الحضور (ضد الغش) ===== */
+.leave-fab{position:fixed;bottom:14px;inset-inline-start:14px;z-index:120;width:52px;height:52px;border-radius:50%;
+  border:2px solid var(--line);background:var(--surface);color:var(--ink);font-size:22px;cursor:pointer;
+  box-shadow:0 6px 0 #000a;transition:transform .07s}
+.leave-fab:active{transform:translateY(4px);box-shadow:0 1px 0 #000a}
+.presence-bar{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:110;display:flex;gap:6px;
+  background:#0b1322ee;border:2px solid var(--line);border-radius:999px;padding:5px 10px;box-shadow:0 4px 14px #000a;
+  max-width:94vw;overflow-x:auto}
+.presence-bar.hidden{display:none}
+.pv{position:relative;width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:50%;
+  background:#16233b;border:2px solid #2fc6b0}
+.pv .av{font-size:18px;line-height:1}
+.pv.away{border-color:var(--coral);animation:pulseAway 1s infinite alternate}
+.pv.off{border-color:#5b6b8c;opacity:.55}
+.pv.gone{border-color:#5b6b8c;opacity:.4;filter:grayscale(1)}
+.pv .bd{position:absolute;top:-7px;inset-inline-end:-7px;font-size:13px;filter:drop-shadow(0 1px 2px #000)}
+@keyframes pulseAway{from{box-shadow:0 0 0 0 #ff6d5a55}to{box-shadow:0 0 0 6px #ff6d5a00}}

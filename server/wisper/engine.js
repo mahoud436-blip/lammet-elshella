@@ -13,7 +13,7 @@ const MIN_PLAYERS = 3;
 const MAX_PLAYERS = 15;
 const VOTE_SECONDS = 45;
 const TOPIC_SECONDS = 90;
-const AVATARS = ['🖋️','🪶','📜','🕵️','🎩','🧣','🦉','🐈‍⬛','🌙','🗝️','🕯️','🎭','🧊','☕','🍇','🫧','🔮','🧿','🍬','🎈','🐚','🌵','🍉','⚡'];
+const AVATARS = ['😂','🤣','😆','😄','😁','😜','🤪','😝','🥳','🙃','😅','🤭','😛','😋','🤩','😎','🤠','🥸','🤡','😺','😹','👽','🤖','👻'];
 
 let NET = { ips: [], port: 3000, hosted: false };
 const now = () => Date.now();
@@ -38,6 +38,7 @@ function createRoom() {
     plan: [], roundIdx: 0,
     topic: '', topicBy: null, topicSource: null, suggestions: [],
     voteOptions: [], votes: new Map(), voteDeadline: null, voteTimer: null,
+    guessIdx: 0,
     topicDeadline: null, topicTimer: null,
     writeSet: new Map(),
     answers: [], guesses: new Map(),    // token -> Map(answerId -> ownerToken)
@@ -53,7 +54,7 @@ function createRoom() {
 function addPlayer(room, name, avatar) {
   const token = rid();
   const p = { token, id: 'w' + (++playerSeq), name, avatar, connected: false, lastSeen: now(), res: null,
-    score: 0, stat: { correct: 0, myAnswersGuessed: 0, myAnswersChances: 0, answers: 0 } };
+    score: 0, left: false, stat: { correct: 0, myAnswersGuessed: 0, myAnswersChances: 0, answers: 0 } };
   room.players.set(token, p);
   room.order.push(token);
   if (!room.hostToken) room.hostToken = token;
@@ -85,14 +86,12 @@ function viewFor(room, p) {
     roundType: room.plan[room.roundIdx] ? room.plan[room.roundIdx].type : null,
     topic: (room.phase === 'write' || room.phase === 'guess' || room.phase === 'reveal') ? room.topic : '',
     topicSource: room.topicSource,
-    topicByName: room.topicBy ? nameOf(room, room.topicBy).name : null,
+    topicByName: null,
     players: allPlayers(room).map(x => ({ id: x.id, name: x.name, avatar: x.avatar, isHost: isHost(room, x),
-      connected: x.connected, score: x.score })),
+      connected: x.connected, left: !!x.left, score: x.score })),
     you: { id: p.id, isHost: isHost(room, p), score: p.score },
   };
   if (room.phase === 'topic') {
-    const writer = room.players.get(room.topicBy);
-    st.writer = writer ? { id: writer.id, name: writer.name, avatar: writer.avatar } : null;
     st.youAreWriter = room.topicBy === p.token;
     st.deadline = room.topicDeadline;
     if (st.youAreWriter) st.suggestions = room.suggestions;
@@ -110,13 +109,17 @@ function viewFor(room, p) {
   }
   if (room.phase === 'guess') {
     const mine = room.guesses.get(p.token) || new Map();
-    st.answers = room.answers.map(a => ({ id: a.id, text: a.text, isYours: a.owner === p.token }));
+    const cur = room.answers[room.guessIdx];
+    st.gi = room.guessIdx;
+    st.gTotal = room.answers.length;
+    st.current = cur ? { id: cur.id, text: cur.text, isYours: cur.owner === p.token } : null;
     st.roster = room.answers.map(a => nameOf(room, a.owner)).filter(w => w.id !== p.id)
       .map(w => ({ id: w.id, name: w.name, avatar: w.avatar }));
-    // إزالة التكرار لو صاحبين ليهم نفس الاسم مستحيلة (الأسماء unique) — الطاقم = أصحاب الإجابات ما عداك
     st.yourGuesses = {};
     for (const [aid, tok] of mine) { const w = nameOf(room, tok); st.yourGuesses[aid] = w.id; }
-    st.doneIds = guessDoneIds(room);
+    st.yourPick = cur && mine.has(cur.id) ? (nameOf(room, mine.get(cur.id)) || {}).id : null;
+    st.pickedIds = cur ? allPlayers(room).filter(x => x.token !== cur.owner && (room.guesses.get(x.token) || new Map()).has(cur.id)).map(x => x.id) : [];
+    st.eligibleCount = cur ? allPlayers(room).filter(x => x.token !== cur.owner).length : 0;
     st.needCount = room.answers.filter(a => a.owner !== p.token).length;
   }
   if (room.phase === 'reveal') {
@@ -164,6 +167,7 @@ function startRound(room) {
   room.topic = ''; room.topicBy = null; room.topicSource = null; room.suggestions = [];
   room.voteOptions = []; room.votes = new Map();
   room.writeSet = new Map(); room.answers = []; room.guesses = new Map();
+  room.guessIdx = 0;
   room.readyNext = new Set(); room.lastReveal = null;
   const r = room.plan[room.roundIdx];
   if (!r) return finishGame(room);
@@ -250,30 +254,26 @@ function startGuess(room) {
   const entries = shuffle([...room.writeSet.entries()]);
   room.answers = entries.map(([owner, text], i) => ({ id: 'a' + i, owner, text }));
   room.guesses = new Map();
+  room.guessIdx = 0;
   for (const [owner] of entries) { const p = room.players.get(owner); if (p) p.stat.answers++; }
   room.phase = 'guess';
   broadcast(room);
 }
 
-function guessDoneIds(room) {
-  const out = [];
-  for (const p of allPlayers(room)) {
-    const need = room.answers.filter(a => a.owner !== p.token).length;
-    const mine = room.guesses.get(p.token);
-    if (need > 0 && mine && mine.size >= need) out.push(p.id);
-  }
-  return out;
-}
 function maybeReveal(room) {
   if (room.phase !== 'guess') return;
-  const conn = connectedPlayers(room);
-  if (!conn.length) return;
-  const allDone = conn.every(p => {
-    const need = room.answers.filter(a => a.owner !== p.token).length;
-    const mine = room.guesses.get(p.token);
-    return need === 0 || (mine && mine.size >= need);
-  });
-  if (allDone) scoreAndReveal(room);
+  const cur = room.answers[room.guessIdx];
+  if (!cur) { scoreAndReveal(room); return; }
+  const eligible = connectedPlayers(room).filter(p => p.token !== cur.owner);
+  const allPicked = eligible.every(p => (room.guesses.get(p.token) || new Map()).has(cur.id));
+  if (!allPicked) return;
+  advanceGuess(room);
+}
+function advanceGuess(room) {
+  if (room.phase !== 'guess') return;
+  room.guessIdx++;
+  if (room.guessIdx >= room.answers.length) scoreAndReveal(room);
+  else broadcast(room);
 }
 
 function scoreAndReveal(room) {
@@ -302,12 +302,12 @@ function scoreAndReveal(room) {
   for (const [tok, g] of gains) { const w = nameOf(room, tok); if (w.id !== 'ghost') yourGainById[w.id] = g; }
   room.lastReveal = {
     topic: room.topic, topicSource: room.topicSource,
-    topicByName: room.topicBy ? nameOf(room, room.topicBy).name : null,
+    topicByName: null,
     answers: answersOut, gains: yourGainById,
   };
   room.roundHistory.push({
     round: room.roundIdx + 1, topic: room.topic, source: room.topicSource,
-    byName: room.topicBy ? nameOf(room, room.topicBy).name : null,
+    byName: null,
     answers: answersOut,
   });
   room.readyNext = new Set();
@@ -332,7 +332,7 @@ function finishGame(room) {
   const players = allPlayers(room);
   const ranking = players.slice().sort((a, b) => b.score - a.score).map((p, i) => ({
     rank: i + 1, id: p.id, name: p.name, avatar: p.avatar, score: p.score,
-    correct: p.stat.correct, connected: p.connected,
+    correct: p.stat.correct, connected: p.connected, left: !!p.left,
   }));
   const awards = [];
   if (ranking.length) awards.push({ icon: '🏆', title: 'بطل اللمّة', who: ranking[0].name, detail: ranking[0].score + ' نقطة' });
@@ -365,6 +365,33 @@ function playAgain(room) {
   room.plan = []; room.roundIdx = 0; room.roundHistory = []; room.results = null;
   room.topic = ''; room.topicBy = null; room.answers = []; room.writeSet = new Map(); room.guesses = new Map();
   room.phase = 'lobby';
+  broadcast(room);
+}
+
+function recheckGates(room) {
+  if (room.phase === 'topic' && room.topicBy) {
+    const w = room.players.get(room.topicBy);
+    if (!w || !w.connected) {
+      const conn = connectedPlayers(room);
+      if (conn.length) {
+        const nw = conn[Math.floor(Math.random() * conn.length)];
+        room.topicBy = nw.token;
+        room.suggestions = shuffle(freeTopicIdxs(room)).slice(0, 6).map(i => TOPICS[i]);
+      }
+    }
+  }
+  if (room.phase === 'vote') maybeCloseVote(room);
+  if (room.phase === 'write') maybeStartGuess(room);
+  if (room.phase === 'guess') maybeReveal(room);
+  if (room.phase === 'reveal') maybeAdvance(room);
+}
+
+function softLeave(room, p) {
+  p.left = true;
+  if (p.res) { try { sseSend(p.res, { t: 'left' }); p.res.end(); } catch (e) {} }
+  p.res = null; p.connected = false;
+  if (room.hostToken === p.token) migrateHost(room);
+  recheckGates(room);
   broadcast(room);
 }
 
@@ -449,7 +476,7 @@ module.exports = {
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write('retry: 2000\n\n');
     if (p.res && p.res !== res) { try { p.res.end(); } catch (e) {} }
-    p.res = res; p.connected = true; p.lastSeen = now();
+    p.res = res; p.connected = true; p.lastSeen = now(); p.left = false;
     broadcast(room);
     req.on('close', () => {
       if (p.res === res) { p.res = null; p.connected = false; p.lastSeen = now(); }
@@ -500,7 +527,7 @@ module.exports = {
     }
     if (A === 'submitTopic') {
       if (room.phase !== 'topic') return R(400, { ok: false, error: 'مش وقت كتابة العنوان' });
-      if (room.topicBy !== p.token) return R(403, { ok: false, error: 'مش دورك — ' + nameOf(room, room.topicBy).name + ' اللي بيكتب' });
+      if (room.topicBy !== p.token) return R(403, { ok: false, error: 'مش دورك المرة دي 🤫' });
       const text = clampStr(b.text, 80);
       if (text.length < 3) return R(400, { ok: false, error: 'اكتب عنوان أطول شوية' });
       clearTimers(room);
@@ -529,6 +556,12 @@ module.exports = {
       if (room.phase !== 'write') return R(400, { ok: false, error: 'مش وقت الإجابة' });
       const text = clampStr(b.text, 140);
       if (!text) return R(400, { ok: false, error: 'اكتب إجابتك الأول' });
+      const norm = text.toLowerCase().replace(/\s+/g, ' ').trim();
+      for (const [tok, other] of room.writeSet) {
+        if (tok === p.token) continue;
+        if (other.toLowerCase().replace(/\s+/g, ' ').trim() === norm)
+          return R(400, { ok: false, error: 'في حد كتب نفس الإجابة بالظبط! 😅 غيّر الصياغة شوية' });
+      }
       room.writeSet.set(p.token, text); // ممكن يعدلها طول ما لسه في ناس بتكتب
       maybeStartGuess(room);
       if (room.phase === 'write') broadcast(room);
@@ -538,6 +571,8 @@ module.exports = {
       if (room.phase !== 'guess') return R(400, { ok: false, error: 'مش وقت التخمين' });
       const ans = room.answers.find(a => a.id === String(b.answerId || ''));
       if (!ans) return R(400, { ok: false, error: 'إجابة مش موجودة' });
+      const curA = room.answers[room.guessIdx];
+      if (!curA || ans.id !== curA.id) return R(400, { ok: false, error: 'مش دور الإجابة دي' });
       if (ans.owner === p.token) return R(400, { ok: false, error: 'دي إجابتك انت 😉' });
       let mine = room.guesses.get(p.token);
       if (!mine) { mine = new Map(); room.guesses.set(p.token, mine); }
@@ -566,7 +601,7 @@ module.exports = {
       if (room.phase === 'vote') closeVote(room);
       else if (room.phase === 'topic') fallbackRandomTopic(room);
       else if (room.phase === 'write') { if (room.writeSet.size >= 2) startGuess(room); else return R(400, { ok: false, error: 'محتاجين إجابتين على الأقل' }); }
-      else if (room.phase === 'guess') scoreAndReveal(room);
+      else if (room.phase === 'guess') advanceGuess(room);
       else if (room.phase === 'reveal') advanceRound(room);
       return R(200, { ok: true });
     }
@@ -583,7 +618,11 @@ module.exports = {
       playAgain(room);
       return R(200, { ok: true });
     }
-    if (A === 'leave') { removePlayer(room, p, false); return R(200, { ok: true }); }
+    if (A === 'leave') {
+      if (room.phase === 'lobby') removePlayer(room, p, false);
+      else softLeave(room, p);
+      return R(200, { ok: true });
+    }
     return R(400, { ok: false, error: 'أكشن غير معروف' });
   },
 

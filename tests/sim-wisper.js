@@ -1,4 +1,4 @@
-/* حبر سري — اختبار محاكاة كامل: node tests/sim-wisper.js */
+/* حبر سري — اختبار محاكاة كامل (نظام التخمين واحدة واحدة): node tests/sim-wisper.js */
 'use strict';
 const http = require('http');
 const { spawn } = require('child_process');
@@ -52,13 +52,13 @@ async function waitFor(pl, pred, ms, label) {
     if (pl.last && pred(pl.last)) return pl.last;
     await sleep(25);
   }
-  throw new Error('waitFor timeout: ' + (label || '') + ' | phase=' + (pl.last && pl.last.phase) + ' round=' + (pl.last && pl.last.round));
+  throw new Error('waitFor timeout: ' + (label || '') + ' | phase=' + (pl.last && pl.last.phase) + ' round=' + (pl.last && pl.last.round) + ' gi=' + (pl.last && pl.last.gi));
 }
 async function act(pl, action, extra) {
   return post('/api/wisper/action', Object.assign({ code: pl.code, token: pl.token, action }, extra || {}));
 }
 async function newPlayer(name, code) {
-  const r = code ? await post('/api/wisper/join', { code, name, avatar: '🖋️' }) : await post('/api/wisper/create', { name, avatar: '🖋️' });
+  const r = code ? await post('/api/wisper/join', { code, name, avatar: '😂' }) : await post('/api/wisper/create', { name, avatar: '😂' });
   must(r.ok, 'إنشاء/دخول ' + name + ' — ' + (r.error || ''));
   const pl = { name, code: r.code, token: r.token, id: r.id, last: null, events: [], closed: false };
   await stream(pl);
@@ -66,29 +66,99 @@ async function newPlayer(name, code) {
   return pl;
 }
 
-/* يلعب جولة كاملة بإجابات وتخمينات صح؛ wrongFor: id لاعب يخمّن غلط (سواب) */
+/* التخمين التتابعي: إجابة إجابة، مع تخصيص صح أو مدوّر (غلط كله) للاعب معين */
+async function seqGuess(players, roundNo, answers, opts) {
+  opts = opts || {};
+  const H = players[0];
+  // خطة كل لاعب: الإجابات اللي مش بتاعته بالترتيب + الاسم اللي هيقوله
+  const plans = new Map(); // pl.id -> Map(answerText -> ownerId)
+  for (const pl of players) {
+    if (opts.skipIds && opts.skipIds.includes(pl.id)) continue;
+    const seq = [];
+    for (const [text, owner] of answers) if (owner !== pl) seq.push([text, owner.id]);
+    const m = new Map();
+    if (opts.wrongFor === pl.id) {
+      for (let i = 0; i < seq.length; i++) m.set(seq[i][0], seq[(i + 1) % seq.length][1]); // تدوير = كله غلط
+    } else {
+      for (const [t, oid] of seq) m.set(t, oid);
+    }
+    plans.set(pl.id, m);
+  }
+  let dupTested = false, orderTested = false, prevId = null;
+  for (let k = 0; k < answers.length; k++) {
+    const stH = await waitFor(H, s => (s.phase === 'guess' && s.gi >= k) || s.phase === 'reveal', 8000, 'إجابة ' + k);
+    if (stH.phase === 'reveal') break;
+    if (stH.gi > k) continue;
+    ok(stH.gTotal === answers.length, 'إجمالي الإجابات مظبوط');
+    // زامن الكل الأول قبل أي تخمين (عشان التقدم التلقائي ميسبقناش)
+    const views = [];
+    for (const pl of players) {
+      const v = await waitFor(pl, s => s.phase === 'guess' && s.gi === k, 5000, 'مزامنة إجابة ' + k);
+      ok(v.current && v.current.ownerName === undefined, 'anti-cheat: صاحب الإجابة مخفي');
+      views.push([pl, v]);
+    }
+    const curId = views[0][1].current.id;
+    const ownerPair = views.find(([, v]) => v.current.isYours);
+    if (ownerPair) {
+      const r = await act(ownerPair[0], 'guess', { answerId: curId, playerId: ownerPair[1].roster[0].id });
+      ok(!r.ok, 'مينفعش أخمّن على إجابتي');
+    }
+    for (const [pl, v] of views) {
+      if (v.current.isYours) continue;
+      if (opts.skipIds && opts.skipIds.includes(pl.id)) continue;
+      if (!orderTested && k >= 1 && prevId) {
+        const r = await act(pl, 'guess', { answerId: prevId, playerId: v.roster[0].id });
+        ok(!r.ok && /دور/.test(r.error || ''), 'مينفعش تخمّن على إجابة عدّت');
+        orderTested = true;
+      }
+      const pick = plans.get(pl.id).get(v.current.text);
+      if (!dupTested && k >= 1 && !(opts.wrongFor === pl.id)) {
+        const usedBefore = Object.entries(v.yourGuesses || {}).find(([aid]) => aid !== v.current.id);
+        if (usedBefore && usedBefore[1] !== pick) {
+          const r = await act(pl, 'guess', { answerId: v.current.id, playerId: usedBefore[1] });
+          ok(!r.ok && /مرة واحدة/.test(r.error || ''), 'نفس الاسم مرتين مرفوض');
+          dupTested = true;
+        }
+      }
+      const r = await act(pl, 'guess', { answerId: v.current.id, playerId: pick });
+      must(r.ok, 'تخمينة ' + pl.name + ' على إجابة ' + k + ' — ' + (r.error || ''));
+    }
+    prevId = curId;
+    if (opts.skipIds && opts.skipIds.length) {
+      await sleep(250); // خلي التقدم التلقائي (لو حصل) يوصلنا الأول
+      const cur = H.last;
+      if (cur && cur.phase === 'guess' && cur.gi === k) {
+        must((await act(H, 'forceContinue')).ok, 'الهوست عدّى الإجابة');
+      }
+      await waitFor(H, s => s.phase === 'reveal' || (s.phase === 'guess' && s.gi > k), 5000, 'تقدم بعد إجابة ' + k);
+    }
+  }
+  return waitFor(H, s => s.phase === 'reveal' && s.round === roundNo, 8000, 'النتيجة بعد آخر إجابة');
+}
+
+/* جولة كاملة */
 async function playRound(players, roundNo, opts) {
   opts = opts || {};
   const H = players[0];
-  let st = await waitFor(H, s => s.round === roundNo && ['topic', 'vote', 'write'].includes(s.phase), 8000, 'بداية جولة ' + roundNo);
+  let st = await waitFor(H, s => s.round === roundNo && ['topic', 'vote', 'write'].includes(s.phase), 9000, 'بداية جولة ' + roundNo);
 
   if (st.phase === 'topic') {
-    // مين الكاتب؟
     let writer = null;
     for (const pl of players) {
-      const v = await waitFor(pl, s => s.round === roundNo && (s.phase !== 'topic' || s.writer), 5000, 'topic sync');
-      if (v.phase === 'topic' && v.youAreWriter) writer = pl;
+      const v = await waitFor(pl, s => s.round === roundNo && s.phase === 'topic', 5000, 'topic sync');
+      ok(v.writer === undefined, 'الغموض: مفيش اسم كاتب في الحالة');
+      if (v.youAreWriter) writer = pl;
     }
-    must(writer, 'في كاتب متحدد للجولة');
+    must(writer, 'في كاتب متحدد (سرًا)');
     const other = players.find(p => p !== writer);
     const bad = await act(other, 'submitTopic', { text: 'محاولة مش دوري' });
-    ok(!bad.ok, 'غير الكاتب مش بيقدر يكتب العنوان');
-    const wv = writer.last;
-    ok(Array.isArray(wv.suggestions) && wv.suggestions.length > 0, 'الكاتب واصله اقتراحات من البنك');
+    ok(!bad.ok && !(bad.error || '').includes(writer.name), 'الرفض من غير ما يكشف اسم الكاتب');
+    ok(Array.isArray(writer.last.suggestions) && writer.last.suggestions.length > 0, 'الكاتب واصله اقتراحات');
     const topic = 'عنوان تجريبي رقم ' + roundNo;
     must((await act(writer, 'submitTopic', { text: topic })).ok, 'الكاتب سلّم العنوان');
     st = await waitFor(H, s => s.phase === 'write' && s.round === roundNo, 5000, 'write بعد الكتابة');
     ok(st.topic === topic && st.topicSource === 'writer', 'العنوان اتسجل ومصدره كاتب');
+    ok(st.topicByName == null, 'اسم الكاتب مش بيظهر أبدًا');
   } else if (st.phase === 'vote') {
     for (const pl of players) {
       const v = await waitFor(pl, s => s.round === roundNo && s.phase === 'vote', 5000, 'vote sync');
@@ -96,87 +166,48 @@ async function playRound(players, roundNo, opts) {
       must((await act(pl, 'vote', { choice: 0 })).ok, 'صوّت ' + pl.name);
     }
     st = await waitFor(H, s => s.phase === 'write' && s.round === roundNo, 5000, 'التصويت اتقفل لوحده');
-    ok(st.topicSource === 'vote', 'مصدر العنوان تصويت — ومن غير أي زرار من الهوست');
+    ok(st.topicSource === 'vote', 'مصدر العنوان تصويت أوتوماتيك');
   } else {
     ok(st.topicSource === 'random', 'جولة عشوائية دخلت الكتابة على طول');
   }
   if (opts.collectTopics) opts.collectTopics.push(st.topic);
 
-  // الكتابة: الكل يسلّم (مع اختبار التعديل)
-  const answers = {}; // text -> player
-  let first = true;
+  // الكتابة + منع التطابق
+  const answers = []; // [ [text, player] ]
+  let first = null;
   for (const pl of players) {
     const text = 'إجابة ' + pl.name + ' ج' + roundNo;
-    if (first) {
-      must((await act(pl, 'submitAnswer', { text: 'مسودة' })).ok, 'تسليم أولي');
-      must((await act(pl, 'submitAnswer', { text })).ok, 'تعديل الإجابة قبل ما الكل يخلص');
-      first = false;
+    if (!first) {
+      must((await act(pl, 'submitAnswer', { text })).ok, 'إجابة أولى');
+      first = text;
+      if (opts.dupTest) {
+        const other = players.find(x => x !== pl);
+        const dup = await act(other, 'submitAnswer', { text: '  ' + text.toUpperCase() + ' ' });
+        ok(!dup.ok && /نفس الإجابة/.test(dup.error || ''), 'التطابق الحرفي مرفوض حتى بمسافات/كابيتال');
+      }
+      must((await act(pl, 'submitAnswer', { text })).ok, 'تعديل/إعادة تسليم شغالة');
     } else {
       must((await act(pl, 'submitAnswer', { text })).ok, 'إجابة ' + pl.name);
     }
-    answers[text] = pl;
+    answers.push([text, pl]);
   }
-  st = await waitFor(H, s => s.phase === 'guess' && s.round === roundNo, 5000, 'التخمين بدأ لوحده لما الكل سلّم');
+  await waitFor(H, s => s.phase === 'guess' && s.round === roundNo, 5000, 'التخمين بدأ لوحده');
 
-  // التخمين
-  for (const pl of players) {
-    const v = await waitFor(pl, s => s.phase === 'guess' && s.round === roundNo, 5000, 'guess sync');
-    ok(v.answers.length === players.length, 'عدد الإجابات = عدد اللاعيبة');
-    ok(v.answers.every(a => a.owner === undefined && a.ownerName === undefined), 'anti-cheat: مفيش أصحاب الإجابات وقت التخمين');
-    const mine = v.answers.find(a => a.isYours);
-    ok(mine && answers[mine.text] === pl, 'إجابتي متعلمة صح');
-    ok(v.roster.length === players.length - 1 && !v.roster.some(r => r.id === pl.id), 'الطاقم من غيري');
-    const own = await act(pl, 'guess', { answerId: mine.id, playerId: v.roster[0].id });
-    ok(!own.ok, 'مينفعش أخمّن على إجابتي');
-    // تخصيص صحيح مع اختبار تكرار الاسم
-    const others = v.answers.filter(a => !a.isYours);
-    const firstOwnerId = v.roster.find(r => r.name === answers[others[0].text].name).id;
-    must((await act(pl, 'guess', { answerId: others[0].id, playerId: firstOwnerId })).ok, 'تخمينة أولى');
-    if (others.length > 1) {
-      const dup = await act(pl, 'guess', { answerId: others[1].id, playerId: firstOwnerId });
-      ok(!dup.ok && /مرة واحدة/.test(dup.error || ''), 'نفس الاسم مرتين مرفوض');
-    }
-    for (let i = 1; i < others.length; i++) {
-      let ownerP = answers[others[i].text];
-      let pid = v.roster.find(r => r.name === ownerP.name).id;
-      if (opts.wrongFor === pl.id) {
-        // سواب بين آخر اتنين → غلطتين
-        const swapWith = answers[others[i - 1].text];
-        pid = v.roster.find(r => r.name === (i === others.length - 1 ? answers[others[0].text] : swapWith).name).id;
-        // بس الاسم ممكن يكون مستخدم — نظّف الأول
-        await act(pl, 'guess', { answerId: others[i].id, playerId: '' });
-        // استخدم اسم لسه متستخدمش: هنبني تخصيص غلط كامل بدل جزئي
-      }
-      const r = await act(pl, 'guess', { answerId: others[i].id, playerId: pid });
-      if (!(opts.wrongFor === pl.id)) must(r.ok, 'تخمينة ' + pl.name);
-    }
-    if (opts.wrongFor === pl.id) {
-      // ابنيله تخصيص غلط كامل: دوّر الأسماء (كل واحدة على اللي بعدها)
-      for (const a of others) await act(pl, 'guess', { answerId: a.id, playerId: '' });
-      const ownerIds = others.map(a => v.roster.find(r => r.name === answers[a.text].name).id);
-      for (let i = 0; i < others.length; i++) {
-        const wrongPid = ownerIds[(i + 1) % ownerIds.length];
-        must((await act(pl, 'guess', { answerId: others[i].id, playerId: wrongPid })).ok, 'تخمينة غلط مقصودة');
-      }
-    }
-  }
-  st = await waitFor(H, s => s.phase === 'reveal' && s.round === roundNo, 6000, 'النتيجة ظهرت لوحدها لما الكل خلص');
+  await seqGuess(players, roundNo, answers, opts);
 
-  // تحقق النقط
   for (const pl of players) {
     const v = await waitFor(pl, s => s.phase === 'reveal' && s.round === roundNo, 4000, 'reveal sync');
+    ok(v.reveal.topicByName == null, 'الغموض مستمر في النتيجة');
     const g = (v.reveal.gains || {})[pl.id] || 0;
     if (opts.wrongFor === pl.id) ok(g === 0, 'الغلطان خد 0 (لقيت ' + g + ')');
-    else ok(g === (players.length - 1) * 100, 'الصح = ' + ((players.length - 1) * 100) + ' (لقيت ' + g + ')');
+    else if (!(opts.skipIds || []).includes(pl.id)) ok(g === (players.length - 1) * 100, 'الصح = ' + ((players.length - 1) * 100) + ' (لقيت ' + g + ')');
   }
-  // الكل يدوس التالي → الجولة الجاية لوحدها
   for (const pl of players) must((await act(pl, 'readyNext')).ok, 'التالي ' + pl.name);
-  return st;
 }
 
 /* ============================================================ */
 async function scenarioA_fullflow() {
-  console.log('▶️ سيناريو A: السير الأوتوماتيكي الكامل (كتابة + تصويت + عشوائي)');
+  console.log('▶️ سيناريو A: السير الأوتوماتيكي + التخمين واحدة واحدة + الغموض');
   const H = await newPlayer('Hoda');
   const code = H.code;
   const P2 = await newPlayer('Peter', code);
@@ -198,9 +229,9 @@ async function scenarioA_fullflow() {
   for (let rn = 1; rn <= 3; rn++) {
     const before = await waitFor(H, s => s.round === rn && ['topic', 'vote', 'write'].includes(s.phase), 8000, 'نوع الجولة ' + rn);
     seenTypes.add(before.roundType);
-    await playRound(all, rn, { collectTopics: topics, wrongFor: rn === 2 ? P3.id : null });
+    await playRound(all, rn, { collectTopics: topics, wrongFor: rn === 2 ? P3.id : null, dupTest: rn === 1 });
   }
-  ok(seenTypes.has('writer') && seenTypes.has('vote') && seenTypes.has('random'), 'التلات أنواع ظهروا (بترتيب متخلط)');
+  ok(seenTypes.has('writer') && seenTypes.has('vote') && seenTypes.has('random'), 'التلات أنواع ظهروا');
 
   const go = await waitFor(H, s => s.phase === 'gameover', 6000, 'النهاية');
   const R = go.results;
@@ -210,16 +241,15 @@ async function scenarioA_fullflow() {
   for (const row of R.ranking) if (row.id !== P3.id) ok(row.score === 600, 'الصح كله = 600 (لقيت ' + row.score + ')');
   ok(R.awards.some(a => a.title === 'بطل اللمّة'), 'جايزة البطل');
   ok(R.awards.some(a => a.title === 'المخبر'), 'جايزة المخبر');
-  ok(R.awards.some(a => a.title === 'الحبر السري' || a.title === 'الكتاب المفتوح'), 'جوايز الغموض');
   must(R.review.length === 3, 'المراجعة 3 جولات');
-  ok(R.review.map(x => x.topic).join('|') === topics.join('|'), 'عناوين المراجعة زي ما اتلعبت بالترتيب');
-  ok(R.review.every(rd => rd.answers.every(a => a.picks.every(p => typeof p.ok === 'boolean'))), 'كل تخمينة متعلمة صح/غلط');
+  ok(R.review.every(rd => rd.byName == null), 'الكاتب فاضل غامض حتى في المراجعة');
+  ok(R.review.map(x => x.topic).join('|') === topics.join('|'), 'عناوين المراجعة بالترتيب');
   console.log('  ✅ سيناريو A تمام');
 }
 
 /* ============================================================ */
 async function scenarioB_noTopicRepeat() {
-  console.log('▶️ سيناريو B: العناوين متتكررش أبدًا في نفس الروم (حتى بعد نلعب تاني)');
+  console.log('▶️ سيناريو B: العناوين متتكررش أبدًا (حتى بعد نلعب تاني)');
   const H = await newPlayer('Rami');
   const code = H.code;
   const P2 = await newPlayer('Rana', code);
@@ -239,13 +269,13 @@ async function scenarioB_noTopicRepeat() {
   const t2 = [];
   for (let rn = 1; rn <= 3; rn++) await playRound(all, rn, { collectTopics: t2 });
   await waitFor(H, s => s.phase === 'gameover', 6000);
-  ok(t2.every(t => !t1.includes(t)), 'ولا عنوان قديم رجع بعد نلعب تاني');
+  ok(t2.every(t => !t1.includes(t)), 'ولا عنوان قديم رجع');
   console.log('  ✅ سيناريو B تمام');
 }
 
 /* ============================================================ */
 async function scenarioC_resilience() {
-  console.log('▶️ سيناريو C: انقطاع الكاتب + تصويت صامت + رجوع بالتوكن + طرد + انتقال هوست');
+  console.log('▶️ سيناريو C: كاتب مفصول + تصويت صامت + تعدية إجابة إجابة + طرد + انتقال هوست');
   const H = await newPlayer('Samy');
   const code = H.code;
   const P2 = await newPlayer('Sara', code);
@@ -256,10 +286,9 @@ async function scenarioC_resilience() {
   let kicked = false;
   for (let rn = 1; rn <= 3; rn++) {
     const players = kicked ? [H, P2] : [H, P2, P3];
-    let st = await waitFor(H, s => s.round === rn && ['topic', 'vote', 'write'].includes(s.phase), 8000, 'جولة ' + rn);
+    let st = await waitFor(H, s => s.round === rn && ['topic', 'vote', 'write'].includes(s.phase), 9000, 'جولة ' + rn);
 
     if (st.phase === 'topic') {
-      // لو الكاتب P3 والوقت مناسب: نفصله ونخلي الهوست يعدّي بعشوائي
       let writerPl = null;
       for (const pl of players) { const v = await waitFor(pl, s => s.round === rn, 4000); if (v.phase === 'topic' && v.youAreWriter) writerPl = pl; }
       if (writerPl && writerPl !== H && !kicked) {
@@ -267,7 +296,7 @@ async function scenarioC_resilience() {
         await sleep(300);
         must((await act(H, 'forceContinue')).ok, 'الهوست عدّى الكاتب المفصول');
         st = await waitFor(H, s => s.phase === 'write' && s.round === rn, 5000, 'كتابة بعد التعدية');
-        ok(st.topicSource === 'random', 'العنوان بقى عشوائي بعد التعدية');
+        ok(st.topicSource === 'random', 'العنوان بقى عشوائي');
         const rj = await post('/api/wisper/join', { code, token: writerPl.token });
         ok(rj.ok && rj.resumed, 'الكاتب رجع بنفس التوكن');
         await stream(writerPl);
@@ -277,31 +306,22 @@ async function scenarioC_resilience() {
         await waitFor(H, s => s.phase === 'write' && s.round === rn, 5000);
       }
     } else if (st.phase === 'vote') {
-      // محدش يصوت → الهوست يعدّي → فايز بالقرعة
       must((await act(H, 'forceContinue')).ok, 'قفل تصويت من غير أصوات');
       st = await waitFor(H, s => s.phase === 'write' && s.round === rn, 5000);
-      ok(st.topicSource === 'vote', 'عنوان بالتصويت رغم الصمت (قرعة)');
+      ok(st.topicSource === 'vote', 'عنوان بالقرعة رغم الصمت');
     }
 
-    // الكتابة
-    for (const pl of players) must((await act(pl, 'submitAnswer', { text: 'جواب ' + pl.name + rn })).ok, 'إجابة ' + pl.name);
+    const answers = [];
+    for (const pl of players) {
+      must((await act(pl, 'submitAnswer', { text: 'جواب ' + pl.name + rn })).ok, 'إجابة ' + pl.name);
+      answers.push(['جواب ' + pl.name + rn, pl]);
+    }
     await waitFor(H, s => s.phase === 'guess' && s.round === rn, 5000, 'تخمين ج' + rn);
 
-    // في الجولة 2: H مش هيخمّن — الهوست يعدّي بنفسه (بيختبر force في التخمين)
-    const doers = rn === 2 ? players.filter(p => p !== H) : players;
-    for (const pl of doers) {
-      const v = await waitFor(pl, s => s.phase === 'guess' && s.round === rn, 4000);
-      const others = v.answers.filter(a => !a.isYours);
-      // تخصيص أي أسماء فريدة (مش مهم الصح هنا)
-      const ids = v.roster.map(r => r.id);
-      for (let i = 0; i < others.length; i++) must((await act(pl, 'guess', { answerId: others[i].id, playerId: ids[i % ids.length] })).ok, 'تخمين ' + pl.name);
-    }
-    if (rn === 2) {
-      must((await act(H, 'forceContinue')).ok, 'الهوست كشف باللي خلصوا');
-    }
+    // الجولة 2: الهوست مش بيخمّن — وبيعدّي كل إجابة بنفسه (اختبار force التتابعي)
+    await seqGuess(players, rn, answers, rn === 2 ? { skipIds: [H.id] } : {});
     await waitFor(H, s => s.phase === 'reveal' && s.round === rn, 6000, 'نتيجة ج' + rn);
 
-    // بعد نتيجة الجولة 2: اطرد P3
     if (rn === 2 && !kicked) {
       must((await act(H, 'kick', { playerId: P3.id })).ok, 'طرد P3');
       await sleep(250);
@@ -316,7 +336,9 @@ async function scenarioC_resilience() {
 
   must((await act(H, 'leave')).ok, 'الهوست خرج');
   const mg = await waitFor(P2, s => s.you && s.you.isHost, 5000, 'انتقال الهوست');
-  ok(mg.players.length === 1, 'فاضل لاعب واحد');
+  ok(mg.players.length === 2, 'الهوست الخارج فاضل في القايمة بسكوره');
+  const hRow = mg.players.find(x => x.id === H.id);
+  ok(hRow && hRow.left === true && !hRow.connected, 'ومتعلم عليه إنه خرج 🚪');
   console.log('  ✅ سيناريو C تمام');
 }
 

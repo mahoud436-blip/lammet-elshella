@@ -19,8 +19,8 @@ function toast(msg, kind) {
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 2600);
   setTimeout(() => t.remove(), 3000);
 }
-const AVATARS = ['🖋️','🪶','📜','🕵️','🎩','🧣','🦉','🐈‍⬛','🌙','🗝️','🕯️','🎭','🧊','☕','🍇','🫧','🔮','🧿','🍬','🎈','🐚','🌵','🍉','⚡'];
-const SRC_TAG = { writer: '✍️ من عند', vote: '🗳️ بالتصويت', random: '🎲 عنوان عشوائي' };
+const AVATARS = ['😂','🤣','😆','😄','😁','😜','🤪','😝','🥳','🙃','😅','🤭','😛','😋','🤩','😎','🤠','🥸','🤡','😺','😹','👽','🤖','👻'];
+const SRC_TAG = { writer: '✍️ كتبه واحد غامض 🤫', vote: '🗳️ بالتصويت', random: '🎲 عنوان عشوائي' };
 
 /* ======================= الصوت ======================= */
 const Snd = {
@@ -53,7 +53,7 @@ const S = {
   name: LS.get('wisper_name', LS.get('tahadi_name', '')),
   avatar: LS.get('wisper_av', AVATARS[Math.floor(Math.random() * AVATARS.length)]),
   st: null, es: null, lastMsg: 0, skew: 0,
-  viewKey: '', sheetFor: null, wake: null,
+  viewKey: '', wake: null,
 };
 
 /* ======================= API ======================= */
@@ -102,8 +102,7 @@ function grabWake() {
 function leaveLocal() {
   if (S.es) { try { S.es.close(); } catch (e) {} S.es = null; }
   S.save = null; LS.del('wisper_save');
-  S.st = null; S.viewKey = ''; S.sheetFor = null;
-  closeSheet();
+  S.st = null; S.viewKey = '';
   renderHome();
 }
 
@@ -111,21 +110,30 @@ function leaveLocal() {
 function header(sub) {
   return `<div class="bunting"></div>
   <div class="top">
-    <img src="./logo.svg" alt="">
+    <img src="/img/wisper-sm.png" alt="">
     <div><div class="title display" style="color:var(--teal)">حبر سري</div><div class="sub">${esc(sub || 'اكتبها في السر.. وخمّن مين كتب إيه 🕵️')}</div></div>
     <button class="btn sm ghost" id="help-btn" style="margin-inline-start:auto">؟</button>
     <button class="btn sm ghost" id="home-btn">🏠</button>
     <button class="btn sm ghost" id="mute-btn">${Snd.muted ? '🔇' : '🔊'}</button>
-  </div>`;
+  </div>
+  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">🚪</button>' : ''}`;
 }
-function bindHeader() {
-  const b = $('#mute-btn'); if (b) b.onclick = () => { Snd.toggle(); b.textContent = Snd.muted ? '🔇' : '🔊'; };
-  const h = $('#help-btn'); if (h) h.onclick = showHelp;
-  const hm = $('#home-btn'); if (hm) hm.onclick = () => {
+function bindHeader() {}
+/* تفويض عام: الأزرار شغالة في كل الشاشات دايمًا */
+document.addEventListener('click', async (e) => {
+  const t = e.target.closest('#help-btn,#home-btn,#mute-btn,#leave-fab');
+  if (!t) return;
+  if (t.id === 'help-btn') { Snd.ensure(); showHelp(); }
+  else if (t.id === 'home-btn') {
     if (S.save && !confirm('ترجع للمّة؟ (مكانك في الروم محفوظ وتقدر ترجعله)')) return;
     location.href = '/';
-  };
-}
+  }
+  else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
+  else if (t.id === 'leave-fab') {
+    if (!confirm('تخرج من الروم؟ 🤔 سكورك هيفضل محسوب في النتيجة النهائية')) return;
+    await act('leave'); leaveLocal();
+  }
+});
 
 /* ======================= شاشة البداية ======================= */
 function renderHome(prefillCode) {
@@ -185,18 +193,17 @@ function render() {
   const st = S.st;
   if (!st) return;
   const q = st.phase === 'write' ? (st.yourAnswer != null ? 'a' : 'n') : '';
-  const key = st.phase + '|' + st.round + '|' + q + '|' + (st.youReady ? 'r' : '');
+  const key = st.phase + '|' + st.round + '|' + q + '|' + (st.youReady ? 'r' : '') + '|' + (st.gi != null ? st.gi : '');
   if (key === S.viewKey) {
     if (st.phase === 'lobby') return renderLobby(st);
     if (st.phase === 'topic') return patchTopic(st);
     if (st.phase === 'vote') return patchVote(st);
     if (st.phase === 'write') return patchWrite(st);
-    if (st.phase === 'guess') return (S.sheetFor != null ? patchGuess(st) : renderGuess(st));
+    if (st.phase === 'guess') return patchGuess(st);
     if (st.phase === 'reveal') return patchReveal(st);
     return;
   }
   S.viewKey = key;
-  closeSheet();
   if (st.phase === 'lobby') renderLobby(st);
   else if (st.phase === 'topic') renderTopic(st);
   else if (st.phase === 'vote') renderVote(st);
@@ -238,7 +245,7 @@ function renderLobby(st) {
           ${isHost && !p.isHost ? `<button class="kick" data-kick="${p.id}">✕</button>` : ''}
           <div class="av">${p.avatar}</div>
           <div class="nm">${esc(p.name)}${p.id === me.id ? ' (انت)' : ''}</div>
-          <div class="st">${p.connected ? 'موجود ✅' : 'اتفصل ⏳'}</div>
+          <div class="st">${p.left ? 'خرج 🚪' : (p.connected ? 'موجود ✅' : 'اتفصل ⏳')}</div>
         </div>`).join('')}
       </div>
       ${st.players.length < 3 ? '<div class="center muted small mt">محتاجين 3 على الأقل — التخمين بين اتنين مش لعبة 😄</div>' : ''}
@@ -290,9 +297,7 @@ function roundBadge(st) {
   return `<div class="center mb"><span class="chip on">الجولة ${st.round} من ${st.totalRounds}</span> <span class="chip">${t}</span></div>`;
 }
 function topicBanner(st) {
-  const src = st.topicSource === 'writer'
-    ? `✍️ من عند ${esc(st.topicByName || '')}`
-    : (SRC_TAG[st.topicSource] || '');
+  const src = SRC_TAG[st.topicSource] || '';
   return `<div class="topic-banner"><div class="tl">عنوان الجولة ${src ? '· ' + src : ''}</div><div class="tx">${esc(st.topic)}</div></div>`;
 }
 function avatarsOf(st, ids) {
@@ -324,7 +329,6 @@ function startCountdown(deadline, startedApprox) {
 function renderTopic(st) {
   Snd.play('q');
   grabWake();
-  const w = st.writer || {};
   if (st.youAreWriter) {
     app.innerHTML = `
       ${header('')}
@@ -332,6 +336,7 @@ function renderTopic(st) {
       <div class="card">
         <div class="center" style="font-size:44px">✍️</div>
         <h2 class="display center">دورك! اكتب عنوان الجولة</h2>
+        <div class="center"><span class="chip">🤫 محدش عارف إنك انت اللي بتكتب</span></div>
         <div class="center muted small mb">اكتب سؤال أو عنوان الكل هيجاوب عليه في السر</div>
         <div class="timer" id="cbar"><div class="fill" style="width:100%"></div></div>
         <input class="field" id="topic-in" maxlength="80" placeholder="مثلًا: أكتر حاجة نفسك تشتريها دلوقتي">
@@ -357,9 +362,9 @@ function renderTopic(st) {
     ${roundBadge(st)}
     <div class="card center">
       <div class="timer" id="cbar"><div class="fill" style="width:100%"></div></div>
-      <div class="writer-line"><span style="font-size:34px">${w.avatar || '✍️'}</span> <b>${esc(w.name || '')}</b> بيكتب عنوان الجولة...</div>
-      <div class="answered-strip"><span class="a">🖋️</span><span class="a">✨</span></div>
-      <div class="muted small">أول ما يكتب، الكل هيجاوب في السر</div>
+      <div class="writer-line"><span style="font-size:38px">🤫</span> <b>حد من الشلة</b> بيكتب عنوان الجولة...</div>
+      <div class="answered-strip"><span class="a">🖋️</span><span class="a">❓</span><span class="a">✨</span></div>
+      <div class="muted small">مين؟ محدش عارف 😏 — أول ما يكتب، الكل هيجاوب في السر</div>
     </div>
     ${hostForce(st, 'عدّيها بعنوان عشوائي')}`;
   bindHeader(); bindForce();
@@ -438,81 +443,63 @@ function patchWrite(st) {
   }
 }
 
-/* ======================= التخمين ======================= */
+/* ======================= التخمين (إجابة واحدة كل مرة) ======================= */
+const OWNER_WAIT_LINES = [
+  'دي إجابتك انت! استنى وشوفهم محتارين 😏',
+  'إجابتك بتلعب بيهم دلوقتي.. اتفرج 🎭',
+  'خليك كول 😎 دي بتاعتك وهما مش واخدين بالهم',
+  'اقعد اتفرج عليهم وهما بيغرقوا في التخمين 🤿',
+];
 function renderGuess(st) {
   grabWake();
   stopTimer();
-  const done = Object.keys(st.yourGuesses || {}).length;
-  const complete = done >= st.needCount;
+  const cur = st.current;
+  if (!cur) { app.innerHTML = header(''); return; }
+  const usedElsewhere = new Set(Object.entries(st.yourGuesses || {}).filter(([aid]) => aid !== cur.id).map(([, pid]) => pid));
   app.innerHTML = `
     ${header('')}
     ${roundBadge(st)}
     ${topicBanner(st)}
     <div class="card tight center">
-      <div style="font-weight:900;font-size:17px">🕵️ خمّن مين كتب كل إجابة</div>
-      <div class="muted small">كل اسم ينفع مرة واحدة بس — خمّنت <b id="g-progress">${done}</b> من ${st.needCount}</div>
+      <span class="chip on">🕵️ الإجابة ${st.gi + 1} من ${st.gTotal}</span>
     </div>
-    <div id="g-list">
-      ${st.answers.map(a => {
-        if (a.isYours) return `
-          <div class="ansmatch yours">
-            <div class="atx">${esc(a.text)}</div>
-            <div class="chip">😉 دي بتاعتك انت</div>
-          </div>`;
-        const gid = (st.yourGuesses || {})[a.id];
-        const gp = gid ? st.roster.find(r => r.id === gid) : null;
-        return `
-          <div class="ansmatch">
-            <div class="atx">${esc(a.text)}</div>
-            ${gp
-              ? `<button class="assign-chip" data-clear="${a.id}"><span>${gp.avatar}</span><span>${esc(gp.name)}</span><span class="x">✕ غيّر</span></button>`
-              : `<button class="btn teal assign-btn" style="width:100%" data-pick="${a.id}">مين كتبها؟ 🤔</button>`}
-          </div>`;
-      }).join('')}
+    <div class="card">
+      <div class="ansmatch ${cur.isYours ? 'yours' : ''}" style="margin-bottom:0">
+        <div class="atx" style="font-size:20px">«${esc(cur.text)}»</div>
+        ${cur.isYours ? `
+          <div class="center mt" style="font-weight:900;color:var(--teal);font-size:16px">${OWNER_WAIT_LINES[st.gi % OWNER_WAIT_LINES.length]}</div>
+        ` : `
+          <div class="muted small mt mb">مين اللي كتبها؟ — كل اسم ينفع مرة واحدة في الجولة</div>
+          <div class="roster-grid" id="roster">
+            ${st.roster.map(r => `
+              <button class="roster-btn ${st.yourPick === r.id ? 'on' : ''}" data-r="${r.id}" ${usedElsewhere.has(r.id) ? 'disabled' : ''}>
+                <span style="font-size:22px">${r.avatar}</span><span>${esc(r.name)}</span>
+                ${usedElsewhere.has(r.id) ? '<span class="hint">اتقفل مع إجابة فاتت</span>' : ''}
+              </button>`).join('')}
+          </div>
+          <div class="center muted small mt" id="g-status">${st.yourPick ? 'اختيارك اتسجل ✅ — تقدر تغيّره لحد ما الكل يختار' : 'دوس على اسم'}</div>
+        `}
+      </div>
     </div>
     <div class="card tight center">
-      ${complete ? '<div style="font-weight:900;color:var(--teal)">خلصت تخميناتك ✅ مستنيين الباقي...</div>' : ''}
-      <div class="muted small">خلّصوا: <span id="g-done-n">${st.doneIds.length}</span>/${st.players.filter(p => p.connected).length}</div>
-      <div class="answered-strip" id="g-done">${avatarsOf(st, st.doneIds)}</div>
+      <div class="muted small">اختاروا: <span id="g-n">${st.pickedIds.length}</span>/${st.eligibleCount}</div>
+      <div class="answered-strip" id="g-strip">${avatarsOf(st, st.pickedIds)}</div>
+      <div class="muted small">أول ما الكل يختار → الإجابة اللي بعدها لوحدها ⬅️</div>
     </div>
-    ${hostForce(st, 'اكشفوا النتيجة باللي خلصوا')}`;
+    ${hostForce(st, 'عدّي الإجابة دي')}`;
   bindHeader(); bindForce();
-  $$('[data-pick]').forEach(b => b.onclick = () => openSheet(st, b.dataset.pick));
-  $$('[data-clear]').forEach(b => b.onclick = async () => { Snd.play('pick'); await act('guess', { answerId: b.dataset.clear, playerId: '' }); });
-}
-function patchGuess(st) {
-  const done = Object.keys(st.yourGuesses || {}).length;
-  const p = $('#g-progress'); if (p) p.textContent = done;
-  const dn = $('#g-done-n'); if (dn) dn.textContent = st.doneIds.length;
-  const ds = $('#g-done'); if (ds) ds.innerHTML = avatarsOf(st, st.doneIds);
-}
-function openSheet(st, answerId) {
-  S.sheetFor = answerId;
-  const used = new Set(Object.entries(st.yourGuesses || {}).filter(([aid]) => aid !== answerId).map(([, pid]) => pid));
-  const ans = st.answers.find(a => a.id === answerId);
-  const ov = document.createElement('div');
-  ov.className = 'sheet';
-  ov.id = 'sheet';
-  ov.innerHTML = `<div class="in">
-    <h3>مين كتب: <span style="color:var(--brass-hi)">«${esc((ans || {}).text || '')}»</span></h3>
-    ${st.roster.map(r => `
-      <button class="roster-btn" data-r="${r.id}" ${used.has(r.id) ? 'disabled' : ''}>
-        <span style="font-size:22px">${r.avatar}</span><span>${esc(r.name)}</span>
-        ${used.has(r.id) ? '<span class="hint">مستخدم مع إجابة تانية</span>' : ''}
-      </button>`).join('')}
-    <button class="btn ghost big mt" id="sheet-x">إلغاء</button>
-  </div>`;
-  ov.onclick = e => { if (e.target === ov) closeSheet(); };
-  document.body.appendChild(ov);
-  $('#sheet-x').onclick = closeSheet;
-  $$('[data-r]', ov).forEach(b => b.onclick = async () => {
+  $$('#roster .roster-btn').forEach(b => b.onclick = async () => {
     Snd.play('pick');
-    const r = await act('guess', { answerId, playerId: b.dataset.r });
-    closeSheet();
-    if (r.ok && S.st) renderGuess(S.st);
+    $$('#roster .roster-btn').forEach(x => x.classList.toggle('on', x === b));
+    const gs = $('#g-status'); if (gs) gs.textContent = 'اختيارك اتسجل ✅ — تقدر تغيّره لحد ما الكل يختار';
+    await act('guess', { answerId: cur.id, playerId: b.dataset.r });
   });
 }
-function closeSheet() { S.sheetFor = null; const s = $('#sheet'); if (s) s.remove(); }
+function patchGuess(st) {
+  const n = $('#g-n'); if (n) n.textContent = st.pickedIds.length;
+  const s = $('#g-strip'); if (s) s.innerHTML = avatarsOf(st, st.pickedIds);
+  $$('#roster .roster-btn').forEach(x => x.classList.toggle('on', st.yourPick === x.dataset.r));
+}
 
 /* ======================= النتيجة (Reveal) ======================= */
 function renderReveal(st) {
@@ -604,7 +591,7 @@ function renderGameover(st) {
     </div>
     <div class="card">
       <h3 class="mb">📊 الترتيب</h3>
-      ${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}</span><span class="muted small">(${p.correct} تخمينة صح)</span><span class="sc">${p.score}</span></div>`).join('')}
+      ${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">🚪 خرج</span>' : ''}</span><span class="muted small">(${p.correct} تخمينة صح)</span><span class="sc">${p.score}</span></div>`).join('')}
     </div>
     <div class="card">
       <h3 class="mb">📚 مراجعة الجولات — مين خمّن صح ومين غلط</h3>
@@ -613,7 +600,7 @@ function renderGameover(st) {
         <details class="review">
           <summary><span>${{ writer: '✍️', vote: '🗳️', random: '🎲' }[rd.source] || '🖋️'}</span><span>الجولة ${rd.round}: ${esc(rd.topic.slice(0, 38))}${rd.topic.length > 38 ? '…' : ''}</span></summary>
           <div class="rv-body">
-            ${rd.byName ? `<div class="muted small mt">العنوان من عند ${esc(rd.byName)}</div>` : ''}
+            ${rd.source === 'writer' ? `<div class="muted small mt">✍️ العنوان كتبه واحد غامض من الشلة 🤫</div>` : ''}
             ${rd.answers.map(a => `
               <div class="ansmatch" style="margin-top:8px">
                 <div class="atx" style="font-size:15px">«${esc(a.text)}»</div>
@@ -637,14 +624,15 @@ function renderGameover(st) {
 /* ======================= الهيلب ======================= */
 const WISPER_HELP = `
 <div style="text-align:start">
-  <h2 class="display" style="color:var(--teal);text-align:center;margin-bottom:4px">🖋️ حبر سري</h2>
+  <div class="center"><img src="/img/wisper.webp" alt="" style="width:110px;height:auto;filter:drop-shadow(0 6px 14px #0009)"></div>
+  <h2 class="display" style="color:var(--teal);text-align:center;margin:6px 0 2px">حبر سري</h2>
   <div class="center muted small" style="margin-bottom:14px">إزاي بنلعب؟</div>
   <p style="margin:0 0 10px"><b>1️⃣ الروم:</b> من 3 لـ 15 لاعب — كود أو QR.</p>
-  <p style="margin:0 0 10px"><b>2️⃣ الهوست بيظبط بس:</b> عدد الجولات من كل نوع — ✍️ لاعب عشوائي يكتب العنوان، 🗳️ تصويت بين 3 عناوين، 🎲 عنوان عشوائي من بنك 200. <b style="color:var(--teal)">والترتيب بيتخلط لوحده، ومفيش هوست بيدوس حاجة بعد كده.</b></p>
-  <p style="margin:0 0 10px"><b>3️⃣ كل جولة:</b> عنوان يظهر — والكل يكتب إجابته <b>في السر</b> 🤫</p>
-  <p style="margin:0 0 10px"><b>4️⃣ التخمين:</b> الإجابات تظهر متخلطة.. خمّن مين كتب كل واحدة. <b style="color:var(--brass-hi)">كل اسم ينفع مرة واحدة بس</b>، وإجابتك انت معروفة ليك.</p>
-  <p style="margin:0 0 10px"><b>5️⃣ النقط:</b> كل تخمينة صح = 100 نقطة. الكل جاوب → النتيجة تظهر لوحدها. الكل داس «التالي» → الجولة الجاية لوحدها.</p>
-  <p style="margin:0"><b>6️⃣ النهاية:</b> جوايز 🏆🕵️🎭 ومراجعة كل الجولات: مين خمّن صح ✅ ومين غلط ❌.</p>
+  <p style="margin:0 0 10px"><b>2️⃣ الهوست بيظبط بس:</b> عدد الجولات من كل نوع — ✍️ واحد يكتب العنوان، 🗳️ تصويت بين 3، 🎲 عشوائي من بنك 200 — والترتيب بيتخلط لوحده. <b style="color:var(--teal)">ومفيش هوست بيدوس حاجة بعد كده.</b></p>
+  <p style="margin:0 0 10px"><b>3️⃣ جولات الكتابة سرّية:</b> لاعب عشوائي بيكتب العنوان و<b style="color:var(--brass-hi)">محدش عارف مين هو</b> 🤫</p>
+  <p style="margin:0 0 10px"><b>4️⃣ كل جولة:</b> الكل يكتب إجابته في السر — <b>ومينفعش اتنين يكتبوا نفس الكلام بالظبط</b>.</p>
+  <p style="margin:0 0 10px"><b>5️⃣ التخمين واحدة واحدة:</b> إجابة تظهر → الكل يخمّن مين كتبها → أول ما الكل يختار تيجي اللي بعدها لوحدها. لو الإجابة بتاعتك؟ استنى وشوفهم محتارين 😏. <b>كل اسم ينفع مرة واحدة</b> في الجولة.</p>
+  <p style="margin:0"><b>6️⃣ النقط والنهاية:</b> تخمينة صح = 100. وفي الآخر جوايز 🏆🕵️🎭 ومراجعة كل الجولات ✅❌.</p>
 </div>`;
 function showHelp() {
   let ov = $('#help-ov');

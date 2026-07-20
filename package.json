@@ -2,7 +2,7 @@
   "name": "lammet-elshella",
   "version": "1.0.0",
   "private": true,
-  "description": "لمّة الشلة — تجميعة ألعاب القعدة: تحدي الشلة + حبر سري. لان أو أونلاين على أي استضافة Node",
+  "description": "لمّة الشلة — تجميعة ألعاب القعدة: اسأل واستفيد + حبر سري. لان أو أونلاين على أي استضافة Node",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
