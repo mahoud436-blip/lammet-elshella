@@ -1,0 +1,16 @@
+{
+  "name": "lammet-elshella",
+  "version": "1.0.0",
+  "private": true,
+  "description": "لمّة الشلة — تجميعة ألعاب القعدة: اسأل واستفيد + حبر سري + لمّحها. لان أو أونلاين على أي استضافة Node",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/sim-tahadi.js && node tests/sim-wisper.js && node tests/sim-lammaha.js",
+    "test:tahadi": "node tests/sim-tahadi.js",
+    "test:wisper": "node tests/sim-wisper.js",
+    "test:lammaha": "node tests/sim-lammaha.js",
+    "validate": "node tools/validate-tahadi-bank.js && node tools/validate-wisper-topics.js && node tools/validate-lammaha-bank.js"
+  },
+  "engines": { "node": ">=16" }
+}
