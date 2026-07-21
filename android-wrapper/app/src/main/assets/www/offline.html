@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>لمّة الشلة</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#101A2B;color:#F4EDDF;font-family:Tahoma,sans-serif;text-align:center;padding:20px}
+.box{max-width:340px}
+.e{font-size:70px}
+h2{margin:10px 0 6px}
+p{color:#B9C3D8;font-size:14px;line-height:1.8}
+button{margin-top:18px;width:100%;padding:15px;border:none;border-radius:14px;font-size:17px;font-weight:800;background:linear-gradient(180deg,#FFB93E,#F2A31B);color:#161006;box-shadow:0 5px 0 #7a4d00}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 #7a4d00}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="e">📡</div>
+  <h2>مفيش نت دلوقتي</h2>
+  <p>لمّة الشلة محتاجة إنترنت عشان توصلك بصحابك.<br>اتأكد من الواي فاي أو الداتا وجرّب تاني.</p>
+  <button onclick="if(window.Android){Android.retry()}else{location.reload()}">🔄 جرّب تاني</button>
+</div>
+</body>
+</html>
