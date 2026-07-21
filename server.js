@@ -13,6 +13,7 @@ const os = require('os');
 const GAMES = {
   tahadi: require('./server/tahadi/engine'),
   wisper: require('./server/wisper/engine'),
+  lammaha: require('./server/lammaha/engine'),
 };
 
 const PUB = path.join(__dirname, 'public');
@@ -58,7 +59,7 @@ const server = http.createServer(async (req, res) => {
   const pathname = url.pathname;
   try {
     // ---- API: /api/<game>/<create|join|action|stream> ----
-    const m = pathname.match(/^\/api\/(tahadi|wisper)\/(create|join|action|stream)$/);
+    const m = pathname.match(/^\/api\/(tahadi|wisper|lammaha)\/(create|join|action|stream)$/);
     if (m) {
       const engine = GAMES[m[1]];
       const op = m[2];
@@ -77,8 +78,10 @@ const server = http.createServer(async (req, res) => {
       let fp = pathname === '/' ? '/index.html' : pathname;
       if (fp === '/tahadi' ) return (res.writeHead(302, { Location: '/tahadi/' }), res.end());
       if (fp === '/wisper') return (res.writeHead(302, { Location: '/wisper/' }), res.end());
+      if (fp === '/lammaha') return (res.writeHead(302, { Location: '/lammaha/' }), res.end());
       if (fp === '/tahadi/') fp = '/tahadi/index.html';
       if (fp === '/wisper/') fp = '/wisper/index.html';
+      if (fp === '/lammaha/') fp = '/lammaha/index.html';
       const full = path.normalize(path.join(PUB, fp));
       if (!full.startsWith(PUB)) { res.writeHead(403); return res.end(); }
       fs.access(full, fs.constants.R_OK, (err) => {
@@ -87,6 +90,7 @@ const server = http.createServer(async (req, res) => {
         let fb = 'index.html';
         if (pathname.startsWith('/tahadi/')) fb = 'tahadi/index.html';
         else if (pathname.startsWith('/wisper/')) fb = 'wisper/index.html';
+        else if (pathname.startsWith('/lammaha/')) fb = 'lammaha/index.html';
         serveFile(res, path.join(PUB, fb), req.method);
       });
       return;
@@ -113,7 +117,7 @@ function listen(port, attempt) {
     NET_IPS = localIPs();
     pushNet(port);
     console.log('');
-    console.log('  🎪 لمّة الشلة شغّالة! (اسأل واستفيد + حبر سري)');
+    console.log('  🎪 لمّة الشلة شغّالة! (اسأل واستفيد + حبر سري + لمّحها)');
     console.log('  ──────────────────────────────');
     if (HOSTED) {
       console.log('  السيرفر شغّال على بورت ' + port + ' (وضع الاستضافة)');
