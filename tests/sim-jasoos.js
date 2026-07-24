@@ -75,7 +75,7 @@ async function scenarioA() {
   // حدود عدد الجولات
   await act(H, 'setSettings', { settings: { rounds: 9 } }); await sleep(120);
   ok(H.last.settings.rounds !== 9, 'عدد جولات برة المدى بيتتجاهل');
-  must((await act(H, 'setSettings', { settings: { cats: ['sports'], rounds: 2, spyMode: 'fixed', spyCount: 1, turnTime: 0 } })).ok, 'إعدادات');
+  must((await act(H, 'setSettings', { settings: { cats: ['sports'], rounds: 2, gameRounds: 1, spyMode: 'fixed', spyCount: 1, turnTime: 0 } })).ok, 'إعدادات');
   await waitFor(H, s => s.settings.rounds === 2 && s.settings.spyCount === 1, 3000);
 
   must((await act(H, 'startGame')).ok, 'بدء');
@@ -135,11 +135,11 @@ async function scenarioA() {
   const wrongTarget = inn.find(x => x.id !== inn[2].id).id;
   must((await act(inn[2], 'vote', { playerIds: [wrongTarget] })).ok, 'تصويت غلط');
 
-  const sg = await waitFor(spies[0], s => s.phase === 'spyGuess', 5000, 'دور تخمين الجاسوس');
+  const sg = await waitFor(spies[0], s => s.phase === 'reveal' && s.guessOpen, 5000, 'دور تخمين الجاسوس');
   ok(sg.youAreSpy === true, 'الجاسوس في شاشة التخمين');
   must((await act(spies[0], 'spyGuess', { text: secret })).ok, 'الجاسوس خمّن صح');
 
-  const rev = await waitFor(H, s => s.phase === 'reveal', 5000, 'الكشف');
+  const rev = await waitFor(H, s => s.phase === 'reveal' && !s.guessOpen, 5000, 'الكشف بعد التخمين');
   ok(rev.result.secret === secret, 'الكلمة اتكشفت');
   ok(rev.result.spyCount === 1, 'عدد الجواسيس ظهر');
   const spyRow = rev.result.spies[0];
@@ -165,7 +165,7 @@ async function scenarioB() {
   const code = H.code;
   const ps = [H];
   for (const n of ['Bb', 'Bc', 'Bd', 'Be']) ps.push(await newPlayer(n, code));
-  must((await act(H, 'setSettings', { settings: { cats: ['animals'], rounds: 2, spyMode: 'fixed', spyCount: 2, turnTime: 0 } })).ok, 'إعدادات');
+  must((await act(H, 'setSettings', { settings: { cats: ['animals'], rounds: 2, gameRounds: 1, spyMode: 'fixed', spyCount: 2, turnTime: 0 } })).ok, 'إعدادات');
   await waitFor(H, s => s.settings.spyCount === 2, 3000);
   must((await act(H, 'startGame')).ok, 'بدء');
   for (const p of ps) await waitFor(p, s => s.phase === 'play', 5000, 'بدأت');
@@ -183,9 +183,9 @@ async function scenarioB() {
     const others = inn.filter(x => x.id !== v.id).slice(0, 2).map(x => x.id);
     must((await act(v, 'vote', { playerIds: others })).ok, 'تصويت غلط ' + v.name);
   }
-  await waitFor(spies[0], s => s.phase === 'spyGuess', 5000, 'تخمين الجواسيس');
+  await waitFor(spies[0], s => s.phase === 'reveal' && s.guessOpen, 5000, 'تخمين الجواسيس');
   for (const s of spies) must((await act(s, 'spyGuess', { text: 'حاجة غلط خالص' })).ok, 'تخمين غلط');
-  const rev = await waitFor(H, s => s.phase === 'reveal', 5000, 'الكشف');
+  const rev = await waitFor(H, s => s.phase === 'reveal' && !s.guessOpen, 5000, 'الكشف');
   ok(rev.result.spies.every(s => s.escapePoints === 100), 'الجواسيس فلتوا من الكل → 100 لكل واحد');
   ok(rev.result.spies.every(s => s.wordPoints === 0), 'مخمنوش الكلمة → صفر');
   ok(rev.result.voters.every(v => v.gained === 0), 'الأبرياء مصابوش → صفر');
@@ -210,7 +210,7 @@ async function scenarioC() {
   const P3 = await newPlayer('Cc', code);
   const P4 = await newPlayer('Cd', code);
   const all = [H, P2, P3, P4];
-  must((await act(H, 'setSettings', { settings: { cats: ['food'], rounds: 2, spyMode: 'random', turnTime: 10 } })).ok, 'إعدادات');
+  must((await act(H, 'setSettings', { settings: { cats: ['food'], rounds: 2, gameRounds: 1, spyMode: 'random', turnTime: 10 } })).ok, 'إعدادات');
   must((await act(H, 'startGame')).ok, 'بدء');
   await waitFor(H, s => s.phase === 'play', 5000);
   ok(H.last.turnDeadline > 0, 'في وقت للدور');
@@ -243,13 +243,13 @@ async function scenarioC() {
       const picks = live.filter(x => x.id !== v.id).slice(0, need).map(x => x.id);
       await act(v, 'vote', { playerIds: picks });
     }
-    await waitFor(H, s => s.phase === 'spyGuess' || s.phase === 'reveal', 6000, 'بعد التصويت');
-    if (H.last.phase === 'spyGuess') {
+    await waitFor(H, s => s.phase === 'reveal', 6000, 'بعد التصويت');
+    if (H.last.phase === 'reveal' && H.last.guessOpen) {
       for (const s of spiesOf(live)) if (!s.closed) await act(s, 'spyGuess', { text: 'تخمينعشوائي' });
       await sleep(150);
-      if (H.last.phase === 'spyGuess') await act(H, 'forceNext');   // احتياطي لو جاسوس خرج
+      if (H.last.guessOpen) await act(H, 'forceNext');   // احتياطي لو جاسوس خرج
     }
-    await waitFor(H, s => s.phase === 'reveal', 6000, 'الكشف');
+    await waitFor(H, s => s.phase === 'reveal' && !s.guessOpen, 6000, 'الكشف');
   }
   // طرد
   const target = live.find(p => p.id !== H.id);
@@ -262,6 +262,53 @@ async function scenarioC() {
   console.log('  ✅ سيناريو C تمام');
 }
 
+async function jVote(all, H) {
+  await waitFor(H, s => s.phase === 'vote', 8000, 'تصويت D');
+  const inn = innocentsOf(all.filter(p => !p.closed));
+  const need = H.last.picksNeeded;
+  for (const v of inn) {
+    const picks = all.filter(x => x !== v && !x.closed).slice(0, need).map(x => x.id);
+    await act(v, 'vote', { playerIds: picks });
+  }
+}
+async function jGuessDone(all, H) {
+  await waitFor(H, s => s.phase === 'reveal' && s.guessOpen, 6000, 'تخمين D');
+  for (const s of spiesOf(all.filter(p => !p.closed))) await act(s, 'spyGuess', { text: 'حاجةغلط' });
+  return waitFor(H, s => s.phase === 'reveal' && !s.guessOpen, 6000, 'كشف D');
+}
+async function scenarioD() {
+  console.log('▶️ سيناريو D: كذا جولة (gameRounds=2) — بعد الجولة تبدأ جولة جديدة مش النتيجة + نقط تراكمية');
+  const H = await newPlayer('Dh'); const code = H.code;
+  const P2 = await newPlayer('Db', code); const P3 = await newPlayer('Dc', code);
+  const all = [H, P2, P3];
+  await waitFor(H, s => s.players.length === 3, 4000, 'اكتمال D');
+  must((await act(H, 'setSettings', { settings: { cats: ['sports'], rounds: 2, gameRounds: 2, spyMode: 'fixed', spyCount: 1, turnTime: 0 } })).ok, 'إعدادات D');
+  must((await act(H, 'startGame')).ok, 'بدء D');
+  // جولة 1
+  await waitFor(H, s => s.phase === 'play' && s.gameRound === 1, 5000, 'جولة 1 بدأت');
+  ok(H.last.totalGameRounds === 2, 'عدد الجولات في الجيم = 2');
+  await playAllTurns(all);
+  await jVote(all, H);
+  const r1 = await jGuessDone(all, H);
+  ok(r1.isLastRound === false, 'جولة 1 مش الأخيرة (زر «الجولة الجاية»)');
+  const after1 = {}; for (const p of all) after1[p.id] = r1.players.find(x => x.id === p.id).score;
+  for (const p of all) must((await act(p, 'readyNext')).ok, 'التالي D1');
+  // المفروض تبدأ جولة جديدة — مش gameover
+  const g2 = await waitFor(H, s => (s.phase === 'play' && s.gameRound === 2) || s.phase === 'gameover', 5000, 'الجولة الجديدة');
+  ok(g2.phase === 'play' && g2.gameRound === 2, 'دخلنا الجولة 2 (مش النتيجة) ✅');
+  // جولة 2 (الأخيرة)
+  await playAllTurns(all);
+  await jVote(all, H);
+  const r2 = await jGuessDone(all, H);
+  ok(r2.isLastRound === true, 'جولة 2 هي الأخيرة (زر «النتيجة النهائية»)');
+  for (const p of all) must((await act(p, 'readyNext')).ok, 'التالي D2');
+  const go = await waitFor(H, s => s.phase === 'gameover', 5000, 'النتيجة النهائية D');
+  ok(go.results.review.length === 2, 'التحليل فيه الجولتين (لقيت ' + go.results.review.length + ')');
+  ok(go.results.ranking.length === 3, 'الترتيب كامل');
+  ok(all.every(p => go.results.ranking.find(x => x.id === p.id).score >= after1[p.id]), 'النقط تراكمية عبر الجولات ✅');
+  console.log('  ✅ سيناريو D تمام');
+}
+
 (async () => {
   console.log('🚀 بنشغّل سيرفر اللمّة للاختبار...');
   const srv = spawn(process.execPath, ['server.js'], { cwd: __dirname + '/..', env: Object.assign({}, process.env, { PORT: String(PORT), NODE_ENV: 'test', ROOM_TTL_MS: '600000' }), stdio: ['ignore', 'pipe', 'pipe'] });
@@ -269,7 +316,7 @@ async function scenarioC() {
   let up = false;
   for (let i = 0; i < 60 && !up; i++) { try { await post('/api/jasoos/join', {}); up = true; } catch (e) { await sleep(120); } }
   must(up, 'السيرفر قام');
-  try { await scenarioA(); await scenarioB(); await scenarioC(); }
+  try { await scenarioA(); await scenarioB(); await scenarioC(); await scenarioD(); }
   catch (e) { failed++; console.error('💥 خطأ:', e.message); }
   srv.kill();
   console.log(`\n===== النتيجة: ✅ ${passed} ناجح | ❌ ${failed} فاشل =====`);

@@ -35,11 +35,11 @@ function createRoom() {
   const room = {
     code, createdAt: now(), lastActivity: now(),
     phase: 'lobby',   // lobby | play | vote | spyGuess | reveal | gameover
-    settings: { cats: ['sports', 'geo', 'food', 'animals'], rounds: 3, spyMode: 'random', spyCount: 1, turnTime: 20 },
+    settings: { cats: ['sports', 'geo', 'food', 'animals'], rounds: 3, gameRounds: 3, spyMode: 'random', spyCount: 1, turnTime: 20 },
     hostToken: null, players: new Map(), order: [], ghosts: new Map(),
     usedItems: new Set(),
     item: null, spies: new Set(), spyCountActual: 0,
-    round: 0, turnOrder: [], turnIdx: 0,
+    gameRound: 0, round: 0, turnOrder: [], turnIdx: 0, guessOpen: false, roundResults: [],
     words: [],            // [{token, word, round, at}]
     turnDeadline: null, turnTimer: null,
     votes: new Map(),     // token -> [ids]
@@ -54,7 +54,7 @@ function createRoom() {
 function addPlayer(room, name, avatar) {
   const token = rid();
   const p = { token, id: 'j' + (++playerSeq), name, avatar, connected: false, away: false, left: false, lastSeen: now(), res: null,
-    score: 0, stat: { caught: 0, escaped: 0, wordsGuessed: 0, spyTimes: 0 } };
+    score: 0, stat: { caught: 0, escaped: 0, wordsGuessed: 0, spyTimes: 0, caughtAsSpy: 0 } };
   room.players.set(token, p);
   room.order.push(token);
   if (!room.hostToken) room.hostToken = token;
@@ -98,12 +98,13 @@ function viewFor(room, p) {
     settings: room.settings, net: NET,
     allCats: BANK.cats(),
     maxSpies: maxSpiesFor(connectedPlayers(room).length || room.players.size),
+    gameRound: room.gameRound, totalGameRounds: room.settings.gameRounds,
     round: room.round, totalRounds: room.settings.rounds,
     players: allPlayers(room).map(x => ({ id: x.id, name: x.name, avatar: x.avatar, isHost: isHost(room, x),
       connected: x.connected, away: !!x.away, left: !!x.left, score: x.score })),
     you: { id: p.id, isHost: isHost(room, p), score: p.score },
   };
-  const inGame = room.phase === 'play' || room.phase === 'vote' || room.phase === 'spyGuess' || room.phase === 'reveal';
+  const inGame = room.phase === 'play' || room.phase === 'vote' || room.phase === 'reveal';
   if (inGame) {
     st.cat = room.item ? BANK.catMeta(room.item.cat) : null;
     st.youAreSpy = room.spies.has(p.token);
@@ -134,16 +135,16 @@ function viewFor(room, p) {
     st.voteTotal = connectedPlayers(room).filter(x => !room.spies.has(x.token)).length;
     st.candidates = activePlayers(room).filter(x => x.token !== p.token).map(x => ({ id: x.id, name: x.name, avatar: x.avatar }));
   }
-  if (room.phase === 'spyGuess') {
-    st.youGuessed = room.spyGuesses.has(p.token);
-    st.spyGuessCount = room.spyGuesses.size;
-    st.spyTotal = room.spies.size;
-  }
   if (room.phase === 'reveal') {
     st.result = room.lastResult;
+    st.guessOpen = !!room.guessOpen;
+    st.youAreSpy = room.spies.has(p.token);
+    st.youGuessed = room.spyGuesses.has(p.token);
+    st.spyGuessCount = room.spyGuesses.size;
+    st.spyTotal = [...room.spies].filter(t => { const q = room.players.get(t); return q && q.connected; }).length;
     st.readyIds = [...room.readyNext].map(t => (room.players.get(t) || {}).id).filter(Boolean);
     st.youReady = room.readyNext.has(p.token);
-    st.isLastRound = room.round >= room.settings.rounds;
+    st.isLastRound = room.gameRound >= room.settings.gameRounds;
   }
   if (room.phase === 'gameover') st.results = room.results;
   return st;
@@ -154,9 +155,27 @@ function broadcast(room) { room.lastActivity = now(); for (const p of allPlayers
 function clearTurnTimer(room) { if (room.turnTimer) { clearTimeout(room.turnTimer); room.turnTimer = null; } room.turnDeadline = null; }
 
 function startGame(room) {
-  room.round = 0;
+  room.gameRound = 0;
+  room.roundResults = [];
   room.usedItems = room.usedItems || new Set();
-  for (const p of allPlayers(room)) { p.score = 0; p.stat = { caught: 0, escaped: 0, wordsGuessed: 0, spyTimes: 0 }; }
+  for (const p of allPlayers(room)) { p.score = 0; p.stat = { caught: 0, escaped: 0, wordsGuessed: 0, spyTimes: 0, caughtAsSpy: 0 }; }
+  startMiniGame(room);
+}
+
+// جولة جديدة (جيم كامل) — جاسوس عشوائي جديد وكلمة جديدة، والنقط تراكمية
+function startMiniGame(room) {
+  clearTurnTimer(room);
+  room.gameRound++;
+  if (room.gameRound > room.settings.gameRounds) return finishGame(room);
+  room.round = 0;
+  room.words = [];
+  room.votes = new Map();
+  room.spyGuesses = new Map();
+  room.readyNext = new Set();
+  room.guessOpen = false;
+  room.item = pickItem(room);
+  if (room.item) room.usedItems.add(room.item.id);
+  chooseSpies(room);
   startRound(room);
 }
 
@@ -186,13 +205,7 @@ function buildTurnOrder(room) {
 function startRound(room) {
   clearTurnTimer(room);
   room.round++;
-  if (room.round > room.settings.rounds) return finishGame(room);
-  if (room.round === 1) {
-    room.item = pickItem(room);
-    if (room.item) room.usedItems.add(room.item.id);
-    chooseSpies(room);
-    room.words = [];
-  }
+  if (room.round > room.settings.rounds) return startVote(room);
   buildTurnOrder(room);
   room.turnIdx = 0;
   room.phase = 'play';
@@ -237,31 +250,16 @@ function startVote(room) {
 function maybeCloseVote(room) {
   if (room.phase !== 'vote') return;
   const voters = connectedPlayers(room).filter(x => !room.spies.has(x.token));
-  if (voters.length && voters.every(x => room.votes.has(x.token))) startSpyGuess(room);
+  if (voters.length && voters.every(x => room.votes.has(x.token))) startReveal(room);
 }
 
-function startSpyGuess(room) {
-  room.spyGuesses = new Map();
-  room.phase = 'spyGuess';
-  broadcast(room);
-  // لو مفيش جواسيس متصلين، عدّي على طول
-  const liveSpies = [...room.spies].filter(t => { const p = room.players.get(t); return p && p.connected; });
-  if (!liveSpies.length) finishRound(room);
-}
-
-function maybeCloseSpyGuess(room) {
-  if (room.phase !== 'spyGuess') return;
-  const liveSpies = [...room.spies].filter(t => { const p = room.players.get(t); return p && p.connected; });
-  if (!liveSpies.length || liveSpies.every(t => room.spyGuesses.has(t))) finishRound(room);
-}
-
-function finishRound(room) {
-  if (room.phase !== 'vote' && room.phase !== 'spyGuess') return;
+// كشف النتيجة أول (مين الجاسوس + مين قفشه + نقط الهروب) — التخمين بيتفتح بعدها
+function startReveal(room) {
+  if (room.phase !== 'vote') return;
   clearTurnTimer(room);
   const spyList = [...room.spies];
   const voters = activePlayers(room).filter(x => !room.spies.has(x.token));
 
-  // نقط الأبرياء: 100 عن كل جاسوس يصيبه
   const voterRows = [];
   for (const v of voters) {
     const picks = room.votes.get(v.token) || [];
@@ -269,53 +267,77 @@ function finishRound(room) {
     const correct = pickedTokens.filter(t => room.spies.has(t));
     v.score += correct.length * 100;
     v.stat.caught += correct.length;
-    voterRows.push({
-      name: v.name, avatar: v.avatar,
-      picked: pickedTokens.map(t => nameOf(room, t).name),
-      correctCount: correct.length, gained: correct.length * 100,
-    });
+    voterRows.push({ name: v.name, avatar: v.avatar, picked: pickedTokens.map(t => nameOf(room, t).name), correctCount: correct.length, gained: correct.length * 100 });
   }
 
-  // نقط الجواسيس
   const spyRows = [];
-  for (const st of spyList) {
-    const sp = room.players.get(st);
-    const spyName = nameOf(room, st);
-    const caughtBy = voters.filter(v => (room.votes.get(v.token) || []).some(id => (activePlayers(room).find(x => x.id === id) || {}).token === st));
+  for (const stok of spyList) {
+    const sp = room.players.get(stok);
+    const spyName = nameOf(room, stok);
+    const caughtBy = voters.filter(v => (room.votes.get(v.token) || []).some(id => (activePlayers(room).find(x => x.id === id) || {}).token === stok));
     let escapePts = 0;
-    if (voters.length) {
-      if (caughtBy.length === 0) escapePts = 100;          // فلت من الكل
-      else if (caughtBy.length < voters.length) escapePts = 50; // فلت من بعضهم
-    }
-    const guess = room.spyGuesses.get(st) || null;
-    const guessedRight = !!(guess && room.item && BANK.isMatch(room.item, guess));
-    const wordPts = guessedRight ? 100 : 0;
-    if (sp) { sp.score += escapePts + wordPts; if (caughtBy.length === 0) sp.stat.escaped++; if (guessedRight) sp.stat.wordsGuessed++; }
-    spyRows.push({
-      name: spyName.name, avatar: spyName.avatar,
-      caughtByCount: caughtBy.length, votersCount: voters.length,
-      caughtByNames: caughtBy.map(v => v.name),
-      escapePoints: escapePts, guess, guessedRight, wordPoints: wordPts, total: escapePts + wordPts,
-    });
+    if (voters.length) { if (caughtBy.length === 0) escapePts = 100; else if (caughtBy.length < voters.length) escapePts = 50; }
+    if (sp) { sp.score += escapePts; if (caughtBy.length === 0) sp.stat.escaped++; if (caughtBy.length > 0) sp.stat.caughtAsSpy++; }
+    spyRows.push({ name: spyName.name, avatar: spyName.avatar, caughtByCount: caughtBy.length, votersCount: voters.length, caughtByNames: caughtBy.map(v => v.name), escapePoints: escapePts, guess: null, guessedRight: false, wordPoints: 0, total: escapePts });
   }
+
+  const nspy = spyList.length;
+  const spyMsg = nspy >= 2
+    ? `أوبس! كان فيه ${nspy === 2 ? 'جاسوسين' : nspy + ' جواسيس'} 😱 قفشتوهم كلهم ولا فلتوا؟`
+    : 'كان فيه جاسوس واحد بس 🕵️ اتقفش ولا فلت؟';
 
   room.lastResult = {
     secret: room.item ? room.item.title : '',
     cat: room.item ? BANK.catMeta(room.item.cat) : null,
-    spyCount: spyList.length,
-    spies: spyRows,
-    voters: voterRows,
+    spyCount: nspy, spyMsg, spies: spyRows, voters: voterRows,
     words: room.words.map(w => { const who = nameOf(room, w.token); return { name: who.name, avatar: who.avatar, word: w.word, wasSpy: room.spies.has(w.token) }; }),
+    guessDone: false,
   };
+  room.spyGuesses = new Map();
+  const liveSpies = spyList.filter(t => { const q = room.players.get(t); return q && q.connected; });
+  room.guessOpen = liveSpies.length > 0;
   room.readyNext = new Set();
   room.phase = 'reveal';
+  broadcast(room);
+  if (!room.guessOpen) finalizeGuess(room);
+}
+
+function maybeCloseGuess(room) {
+  if (room.phase !== 'reveal' || !room.guessOpen) return;
+  const liveSpies = [...room.spies].filter(t => { const q = room.players.get(t); return q && q.connected; });
+  if (!liveSpies.length || liveSpies.every(t => room.spyGuesses.has(t))) finalizeGuess(room);
+}
+
+// بعد ما الجواسيس يخمنوا الكلمة — بونس التخمين وتحديث النتيجة
+function finalizeGuess(room) {
+  if (!room.lastResult) return;
+  const spyList = [...room.spies];
+  for (let i = 0; i < spyList.length; i++) {
+    const stok = spyList[i];
+    const sp = room.players.get(stok);
+    const guess = room.spyGuesses.get(stok) || null;
+    const guessedRight = !!(guess && room.item && BANK.isMatch(room.item, guess));
+    const wordPts = guessedRight ? 100 : 0;
+    if (sp && guessedRight) { sp.score += wordPts; sp.stat.wordsGuessed++; }
+    const row = room.lastResult.spies[i];
+    if (row) { row.guess = guess; row.guessedRight = guessedRight; row.wordPoints = wordPts; row.total = row.escapePoints + wordPts; }
+  }
+  room.guessOpen = false;
+  room.lastResult.guessDone = true;
+  room.roundResults = room.roundResults || [];
+  room.roundResults.push(room.lastResult);
+  room.readyNext = new Set();
   broadcast(room);
 }
 
 function maybeAdvance(room) {
-  if (room.phase !== 'reveal') return;
+  if (room.phase !== 'reveal' || room.guessOpen) return;
   const conn = connectedPlayers(room);
-  if (conn.length && conn.every(p => room.readyNext.has(p.token))) finishGame(room);
+  if (conn.length && conn.every(p => room.readyNext.has(p.token))) advanceMiniGame(room);
+}
+function advanceMiniGame(room) {
+  if (room.gameRound >= room.settings.gameRounds) finishGame(room);
+  else startMiniGame(room);
 }
 
 function finishGame(room) {
@@ -333,7 +355,13 @@ function finishGame(room) {
   let bestSpy = null;
   for (const p of players) if (p.stat.spyTimes > 0 && (!bestSpy || p.stat.escaped > bestSpy.stat.escaped)) bestSpy = p;
   if (bestSpy && bestSpy.stat.escaped > 0) awards.push({ icon: '🕵️', title: 'الجاسوس المحترف', who: bestSpy.name, detail: `فلت ${bestSpy.stat.escaped} مرة` });
-  room.results = { ranking, awards, review: room.lastResult ? [room.lastResult] : [] };
+  let mostGuessed = null;
+  for (const p of players) if (p.stat.wordsGuessed > 0 && (!mostGuessed || p.stat.wordsGuessed > mostGuessed.stat.wordsGuessed)) mostGuessed = p;
+  if (mostGuessed) awards.push({ icon: '🎯', title: 'قارئ الأفكار', who: mostGuessed.name, detail: `خمّن الكلمة ${mostGuessed.stat.wordsGuessed} مرة وهو جاسوس` });
+  let mostCaughtSpy = null;
+  for (const p of players) if (p.stat.caughtAsSpy > 0 && (!mostCaughtSpy || p.stat.caughtAsSpy > mostCaughtSpy.stat.caughtAsSpy)) mostCaughtSpy = p;
+  if (mostCaughtSpy) awards.push({ icon: '🥴', title: 'الجاسوس الفاشوش', who: mostCaughtSpy.name, detail: `اتقفش ${mostCaughtSpy.stat.caughtAsSpy} مرة` });
+  room.results = { ranking, awards, review: (room.roundResults || []).slice() };
   room.phase = 'gameover';
   broadcast(room);
 }
@@ -346,7 +374,7 @@ function playAgain(room) {
   if (!room.players.has(room.hostToken)) room.hostToken = room.order[0] || null;
   for (const p of allPlayers(room)) { p.score = 0; p.left = false; p.away = false; p.stat = { caught: 0, escaped: 0, wordsGuessed: 0, spyTimes: 0 }; }
   clearTurnTimer(room);
-  room.round = 0; room.words = []; room.spies = new Set(); room.item = null;
+  room.gameRound = 0; room.round = 0; room.words = []; room.spies = new Set(); room.item = null; room.roundResults = []; room.guessOpen = false;
   room.votes = new Map(); room.spyGuesses = new Map(); room.results = null; room.lastResult = null;
   room.phase = 'lobby';
   broadcast(room);
@@ -359,8 +387,7 @@ function recheckGates(room) {
     if (!cur || !cur.connected) skipTurn(room);
   }
   if (room.phase === 'vote') maybeCloseVote(room);
-  if (room.phase === 'spyGuess') maybeCloseSpyGuess(room);
-  if (room.phase === 'reveal') maybeAdvance(room);
+  if (room.phase === 'reveal') { maybeCloseGuess(room); maybeAdvance(room); }
 }
 
 function softLeave(room, p) {
@@ -466,6 +493,7 @@ module.exports = {
       const s = b.settings || {};
       if (Array.isArray(s.cats)) { const v = [...new Set(s.cats.filter(c => BANK.catMeta(c)))]; if (v.length >= 1) room.settings.cats = v; }
       const rr = parseInt(s.rounds, 10); if (Number.isInteger(rr) && rr >= 2 && rr <= 6) room.settings.rounds = rr;
+      const gr = parseInt(s.gameRounds, 10); if (Number.isInteger(gr) && gr >= 1 && gr <= 10) room.settings.gameRounds = gr;
       if (s.spyMode === 'random' || s.spyMode === 'fixed') room.settings.spyMode = s.spyMode;
       const sc = parseInt(s.spyCount, 10);
       if (Number.isInteger(sc) && sc >= 1 && sc <= 3) room.settings.spyCount = Math.min(sc, maxSpiesFor(room.players.size));
@@ -510,17 +538,17 @@ module.exports = {
       return R(200, { ok: true });
     }
     if (A === 'spyGuess') {
-      if (room.phase !== 'spyGuess') return R(400, { ok: false, error: 'مش وقتها' });
+      if (room.phase !== 'reveal' || !room.guessOpen) return R(400, { ok: false, error: 'مش وقتها' });
       if (!room.spies.has(p.token)) return R(400, { ok: false, error: 'انت مش الجاسوس' });
       const g = clampStr(b.text, 60);
       if (!g) return R(400, { ok: false, error: 'اكتب تخمينك' });
       room.spyGuesses.set(p.token, g);
       broadcast(room);
-      maybeCloseSpyGuess(room);
+      maybeCloseGuess(room);
       return R(200, { ok: true });
     }
     if (A === 'readyNext') {
-      if (room.phase !== 'reveal') return R(400, { ok: false, error: 'مش وقتها' });
+      if (room.phase !== 'reveal' || room.guessOpen) return R(400, { ok: false, error: 'مش وقتها — الجاسوس لسه بيخمن' });
       room.readyNext.add(p.token);
       maybeAdvance(room);
       if (room.phase === 'reveal') broadcast(room);
@@ -529,9 +557,8 @@ module.exports = {
     if (A === 'forceNext') {
       if (!isHost(room, p)) return R(403, { ok: false, error: 'الهوست بس' });
       if (room.phase === 'play') skipTurn(room);
-      else if (room.phase === 'vote') startSpyGuess(room);
-      else if (room.phase === 'spyGuess') finishRound(room);
-      else if (room.phase === 'reveal') finishGame(room);
+      else if (room.phase === 'vote') startReveal(room);
+      else if (room.phase === 'reveal') { if (room.guessOpen) finalizeGuess(room); else advanceMiniGame(room); }
       return R(200, { ok: true });
     }
     if (A === 'presence') {
