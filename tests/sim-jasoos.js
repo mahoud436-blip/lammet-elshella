@@ -137,7 +137,14 @@ async function scenarioA() {
 
   const sg = await waitFor(spies[0], s => s.phase === 'reveal' && s.guessOpen, 5000, 'دور تخمين الجاسوس');
   ok(sg.youAreSpy === true, 'الجاسوس في شاشة التخمين');
+  // 🐛 ريجريشن: الجاسوس لسه ما خمّنش — الكلمة مينفعش تبقى ظاهرة له (كانت هي المشكلة المُبلّغ عنها)
+  ok(!sg.result.secret, 'الجاسوس قبل ما يخمّن — الكلمة مخفية عنه 🚫');
+  ok(!!sg.result.spyMsg, 'باقي بيانات الكشف (غير الكلمة) لسه ظاهرة للجاسوس');
+  const innSeesReveal = innocentsOf(all).find(p => p.last.phase === 'reveal');
+  if (innSeesReveal) ok(innSeesReveal.last.result.secret === secret, 'الأبرياء شايفين الكلمة في الكشف زي العادة');
   must((await act(spies[0], 'spyGuess', { text: secret })).ok, 'الجاسوس خمّن صح');
+  await waitFor(spies[0], s => s.youGuessed === true, 3000, 'اتسجل تخمين الجاسوس');
+  ok(spies[0].last.result.secret === secret, 'بعد ما خمّن — الكلمة بقت ظاهرة له ✅');
 
   const rev = await waitFor(H, s => s.phase === 'reveal' && !s.guessOpen, 5000, 'الكشف بعد التخمين');
   ok(rev.result.secret === secret, 'الكلمة اتكشفت');

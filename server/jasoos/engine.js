@@ -136,10 +136,12 @@ function viewFor(room, p) {
     st.candidates = activePlayers(room).filter(x => x.token !== p.token).map(x => ({ id: x.id, name: x.name, avatar: x.avatar }));
   }
   if (room.phase === 'reveal') {
-    st.result = room.lastResult;
     st.guessOpen = !!room.guessOpen;
     st.youAreSpy = room.spies.has(p.token);
     st.youGuessed = room.spyGuesses.has(p.token);
+    // الجاسوس اللي لسه ما خمّنش مينفعش يشوف الكلمة قبل ما يبعت تخمينه
+    const hideSecret = st.guessOpen && st.youAreSpy && !st.youGuessed;
+    st.result = (hideSecret && room.lastResult) ? Object.assign({}, room.lastResult, { secret: null }) : room.lastResult;
     st.spyGuessCount = room.spyGuesses.size;
     st.spyTotal = [...room.spies].filter(t => { const q = room.players.get(t); return q && q.connected; }).length;
     st.readyIds = [...room.readyNext].map(t => (room.players.get(t) || {}).id).filter(Boolean);
