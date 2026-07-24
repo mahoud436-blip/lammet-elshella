@@ -267,13 +267,6 @@ function buildLobby(st) {
       </div>
       <div class="center muted small" style="font-size:12px">يعني ${s.casesPerPlayer * st.players.length} قضية إجمالي</div>
 
-      <div class="mt center muted small">عدد مرات تبديل الكلمة للمتّهم</div>
-      <div class="stepper">
-        <button class="btn" data-min="pass" ${isHost ? '' : 'disabled'}>−</button>
-        <div class="val" style="color:var(--brass-hi)">${s.maxPass}</div>
-        <button class="btn" data-plus="pass" data-mn="0" data-mx="2" ${isHost ? '' : 'disabled'}>+</button>
-      </div>
-
       <div class="mt center muted small">ترتيب أسئلة المحققين</div>
       <div class="row" style="justify-content:center">
         <span class="chip click ${s.askOrder === 'turns' ? 'on' : ''} ${isHost ? '' : 'locked'}" data-askorder="turns">➡️ بالدور</span>
@@ -317,12 +310,12 @@ function buildLobby(st) {
     $$('.cat-chip', grid).forEach(el => el.onclick = () => { const id = el.dataset.cat; if (cats.includes(id)) { if (cats.length === 1) return toast('لازم كاتيجوري واحدة على الأقل', 'err'); cats = cats.filter(c => c !== id); } else cats.push(id); el.classList.toggle('on'); $('#cat-count').textContent = cats.length; act('setSettings', { settings: { cats } }); });
     $$('[data-plus]').forEach(b => b.onclick = () => {
       if (b.dataset.plus === 'cases') act('setSettings', { settings: { casesPerPlayer: Math.min(5, s.casesPerPlayer + 1) } });
-      else if (b.dataset.plus === 'pass') act('setSettings', { settings: { maxPass: Math.min(2, s.maxPass + 1) } });
+      
       else act('setSettings', { settings: { rounds: Math.min(10, s.rounds + 1) } });
     });
     $$('[data-min]').forEach(b => b.onclick = () => {
       if (b.dataset.min === 'cases') act('setSettings', { settings: { casesPerPlayer: Math.max(1, s.casesPerPlayer - 1) } });
-      else if (b.dataset.min === 'pass') act('setSettings', { settings: { maxPass: Math.max(0, s.maxPass - 1) } });
+      
       else act('setSettings', { settings: { rounds: Math.max(2, s.rounds - 1) } });
     });
     $$('[data-askorder]').forEach(el => el.onclick = () => act('setSettings', { settings: { askOrder: el.dataset.askorder } }));
@@ -346,7 +339,7 @@ function startCountdown(deadline) {
   if (timerRAF) cancelAnimationFrame(timerRAF);
   timerRAF = requestAnimationFrame(loop);
 }
-const LEAVE_BTN = '<button class="btn ghost big mt" id="leave-btn2">🚪 اخرج من الروم</button>';
+const LEAVE_BTN = '';
 const ACC_LINES = ['النهاردة انت المتّهم! 🎭', 'وقعت في الفخ — انت المتّهم 😅', 'الكرسي الساخن ليك 🔥', 'كلهم هيحققوا معاك دلوقتي 😬'];
 const DET_LINES = ['انت محقق 🔎 شمّر عن دراعك', 'دورك تحقق وتكتشف 🕵️', 'المحقق الذكي.. ابدأ اسأل 🧠', 'عينك على الكلمة يا محقق 👀'];
 function roleBanner(st) {
@@ -379,7 +372,7 @@ function buildPick(st) {
   const locked = st.pickMode;
   app.innerHTML = `${header('')}${caseBadge(st)}${roleBanner(st)}
     <div class="card center"><div class="cluer-hero"><div class="big">🎭</div><h3>جهّز كلمتك</h3>
-      <div class="muted small">${st.allowCustomWord ? 'اختار كلمة من البنك أو اكتب واحدة بنفسك — ولازم تكمّل باللي تختاره' : 'دي كلمتك — تقدر تبدّلها لو صعبة'}</div></div>
+      <div class="muted small">${st.allowCustomWord ? 'اختار كلمة من البنك أو اكتب واحدة بنفسك — ولازم تكمّل باللي تختاره' : 'دي كلمتك السرية — جهّز نفسك للأسئلة'}</div></div>
     </div>
     ${st.secret ? `<div class="secret-box"><div class="lbl">🤫 الكلمة السرية (انت بس شايفها)</div><div class="word" id="secret-word">${esc(st.secret)}</div><div class="cat mt"><span class="chip" id="secret-cat">${st.cat ? st.cat.icon + ' ' + st.cat.name : ''}</span></div></div>` : ''}
     <div class="card">
@@ -392,7 +385,6 @@ function buildPick(st) {
         </div>
         <button class="btn teal big mt" id="pick-own">✍️ استخدم كلمتي</button>
       ` : ''}
-      ${locked === 'bank' ? `<button class="btn ghost big" id="reroll" ${st.passesLeft > 0 ? '' : 'disabled'}>🔀 بدّل الكلمة (فاضل ${st.passesLeft})</button>` : ''}
       ${st.secret ? '<button class="btn primary big mt" id="start-play">🔎 يلا يسألوني</button>' : ''}
     </div>
     ${LEAVE_BTN}`;
@@ -400,14 +392,12 @@ function buildPick(st) {
   let chosenCat = (st.catOptions && st.catOptions[0]) ? st.catOptions[0].id : null;
   $$('.cat-pick').forEach(el => el.onclick = () => { $$('.cat-pick').forEach(x => x.classList.remove('on')); el.classList.add('on'); chosenCat = el.dataset.cat; });
   const po = $('#pick-own'); if (po) lockBtn(po, async () => { const w = $('#own-word').value.trim(); if (w.length < 2) return toast('اكتب كلمة صح', 'err'); await act('pickCustom', { word: w, cat: chosenCat }); });
-  const rr = $('#reroll'); if (rr) lockBtn(rr, () => { Snd.play('pick'); return act('rerollWord'); });
   const sp = $('#start-play'); if (sp) lockBtn(sp, () => { Snd.play('turn'); return act('startPlay'); });
   bindLeave2();
 }
 function patchPick(st) {
   const w = $('#secret-word'); if (w && st.secret != null) w.textContent = st.secret;
   const c = $('#secret-cat'); if (c && st.cat) c.textContent = st.cat.icon + ' ' + st.cat.name;
-  const rr = $('#reroll'); if (rr) { rr.textContent = `🔀 بدّل الكلمة (فاضل ${st.passesLeft})`; rr.disabled = st.passesLeft <= 0; }
 }
 
 /* ===== اللعب ===== */
@@ -424,7 +414,7 @@ function counters(st) {
 }
 function accBox(st) {
   return st.youAreAccused
-    ? `<div class="secret-box"><div class="lbl">🤫 كلمتك السرية</div><div class="word">${esc(st.secret || '')}</div><div class="cat mt"><span class="chip">${st.cat ? st.cat.icon + ' ' + st.cat.name : ''}</span></div>${st.penalty ? `<div class="penalty-note">⚠️ اتخصم منك ${st.penalty} نقطة (أسئلة مردّتش عليها)</div>` : ''}</div>`
+    ? `<div class="secret-box"><div class="lbl">🤫 كلمتك السرية</div><div class="word">${esc(st.secret || '')}</div><div class="cat mt"><span class="chip">${st.cat ? st.cat.icon + ' ' + st.cat.name : ''}</span></div>${st.penalty ? `<div class="penalty-note">⚠️ اتخصم منك ${st.penalty} نقاط (أسئلة مردّتش عليها)</div>` : ''}</div>`
     : `<div class="card tight center"><div class="muted small">المتّهم</div><div style="font-weight:900;font-size:18px">${st.accused ? st.accused.avatar + ' ' + esc(st.accused.name) : ''}</div><div class="chip mt">${st.cat ? st.cat.icon + ' ' + st.cat.name : ''}</div></div>`;
 }
 function detStrip(st) {
@@ -446,7 +436,7 @@ function buildPlay(st) {
         : (st.youSubmitted
           ? `<div class="card center"><div class="big-emoji">🔒</div><h3>إجابتك اتقفلت</h3>
              <div class="muted mt">«${esc(st.yourSubmission || '')}»</div>
-             <div class="muted small mt">محدش هيعرف صح ولا غلط غير في آخر اللعبة — حتى الهوست</div>
+             <div class="muted small mt">محدش هيعرف صح ولا غلط غير لما القضية تتقفل</div>
              <div class="muted small mt">قرروا <b id="d-n">${st.decidedCount}</b> من ${st.decideTotal}</div></div>`
           : (st.youDecided
             ? `<div class="card center"><div class="big-emoji">👍</div><h3>هتكمّل التحقيق</h3><div class="muted small mt">مستنيين الباقي — قرروا <b id="d-n">${st.decidedCount}</b> من ${st.decideTotal}</div></div>`
@@ -524,28 +514,38 @@ function patchPlay(st) {
 
 /* ===== نهاية القضية (محايدة — مفيش كشف) ===== */
 function buildCaseEnd(st) {
-  stopTimers(); Snd.play('pick');
+  stopTimers(); Snd.play('ok');
+  const r = st.result || {};
   const ce = st.caseEnd || {};
   const readyTotal = st.readyTotal || st.players.filter(p => p.connected).length;
+  const solvers = (r.answers || []).filter(a => a.correct).length;
+  const ranking = st.players.slice().sort((a, b) => b.score - a.score);
   app.innerHTML = `${header('')}
-    <div class="counters"><span class="chip on">القضية ${st.caseNo}/${st.totalCases} خلصت ✅</span></div>
-    <div class="card center">
-      <div class="big-emoji">🔒</div>
-      <h3>القضية خلصت</h3>
-      <div class="muted mt">المتّهم كان ${ce.accusedAvatar} <b>${esc(ce.accusedName)}</b></div>
-      <div class="muted small mt">النتيجة وكل الإجابات هتتكشف في <b style="color:var(--brass-hi)">آخر اللعبة</b> 🤫</div>
+    <div class="counters"><span class="chip on">القضية ${st.caseNo}/${st.totalCases} — الكشف 🔓</span></div>
+    <div class="secret-box">
+      <div class="lbl">🔓 الكلمة كانت</div>
+      <div class="word">${esc(r.secret || '')}</div>
+      <div class="cat mt"><span class="chip">${r.cat ? r.cat.icon + ' ' + r.cat.name : ''}</span></div>
+      <div class="muted small mt">المتّهم كان ${r.accusedAvatar || ''} <b>${esc(r.accusedName || '')}</b></div>
+      ${r.accusedPenalty ? `<div class="penalty-note">المتّهم اتخصم منه ${r.accusedPenalty} نقاط</div>` : ''}
     </div>
+    <div class="card">
+      <h3 class="mb">🔐 إجابات المحققين ${solvers ? `— عرفوها ${solvers}` : '— محدش عرفها 😮'}</h3>
+      ${(r.answers || []).map(a => `<div class="guess-item ${a.correct ? 'correct' : ''}"><span class="who">${a.avatar} ${esc(a.name)}</span><span class="gtext">${a.answer ? `«${esc(a.answer)}»` : '— مسلّمش'} ${a.correct ? `✅ ج${a.round} <b>+${a.points}</b>` : '❌'}</span></div>`).join('')}
+    </div>
+    <details class="case-rev"><summary><span class="cr-w">📜 سجل التحقيق</span></summary><div class="cr-body">
+      ${(r.history || []).length ? (r.history || []).map(h => `<div class="log-item"><div class="muted small">ج${h.round} · ${h.avatar} ${esc(h.name)}</div><div style="font-weight:800">${esc(h.text)}</div>${h.answer ? `<span class="ans-badge ${h.answer}" style="font-size:14px;padding:2px 10px">${ANS_TXT[h.answer]}</span>` : ''}</div>`).join('') : '<div class="muted small">مفيش أسئلة</div>'}
+    </div></details>
+    <div class="card"><h3 class="mb">📊 الترتيب لحد دلوقتي</h3>${ranking.map((p, i) => `<div class="rank-row ${p.id === st.you.id ? 'me' : ''}"><span class="pos">#${i + 1}</span><span>${p.avatar}</span><span>${esc(p.name)}</span><span class="sc">${p.score}</span></div>`).join('')}</div>
     <div class="card tight center">
       ${st.youReady
         ? '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>'
-        : `<button class="btn primary big" id="ready-btn">${ce.isLast ? '🏁 يلا نشوف النتيجة' : '⬅️ القضية الجاية'}</button>`}
+        : `<button class="btn primary big" id="ready-btn">${ce.isLast ? '🏁 النتيجة النهائية' : '⬅️ القضية الجاية'}</button>`}
       <div class="muted small mt">جاهزين: <span id="r-n">${(st.readyIds || []).length}</span>/${readyTotal}</div>
       ${st.you.isHost ? '<button class="btn sm ghost mt" id="force-btn" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button>' : ''}
-    </div>
-    ${LEAVE_BTN}`;
+    </div>`;
   lockBtn($('#ready-btn'), () => { Snd.play('pick'); return act('readyNext'); });
   const fb = $('#force-btn'); if (fb) fb.onclick = async () => { if (await uiConfirm('تكمّلوا من غير المتأخرين؟', { emoji: '⏭️', okLabel: 'كمّل', danger: false })) act('forceNext'); };
-  bindLeave2();
 }
 function patchCaseEnd(st) { const n = $('#r-n'); if (n) n.textContent = (st.readyIds || []).length; }
 
@@ -570,7 +570,7 @@ function buildGameover(st) {
         <span class="cr-acc">${c.accusedAvatar} ${esc(c.accusedName)}</span>
       </summary>
       <div class="cr-body">
-        ${c.accusedPenalty ? `<div class="penalty-note">المتّهم اتخصم منه ${c.accusedPenalty} نقطة</div>` : ''}
+        ${c.accusedPenalty ? `<div class="penalty-note">المتّهم اتخصم منه ${c.accusedPenalty} نقاط</div>` : ''}
         <div class="cr-sec">🔐 إجابات المحققين</div>
         ${(c.answers || []).map(a => `<div class="guess-item ${a.correct ? 'correct' : ''}"><span class="who">${a.avatar} ${esc(a.name)}</span><span class="gtext">${a.answer ? `«${esc(a.answer)}»` : '— مسلّمش'} ${a.correct ? `✅ ج${a.round} +${a.points}` : '❌'}</span></div>`).join('')}
         <div class="cr-sec" style="margin-top:10px">📜 سجل التحقيق</div>
@@ -595,10 +595,10 @@ const PATCH = { lobby: () => {}, pick: patchPick, play: patchPlay, caseEnd: patc
 /* ===== التعليمات ===== */
 const CONAN_STEPS = [
   ['🎯', 'اللعبة إيه؟', 'لاعب واحد (<span class="hl">المتّهم</span>) معاه كلمة سرية، والباقي (<span class="hl">المحققين</span>) بيسألوه أسئلة إجابتها <b>أه / لا / مش قادر أحدد</b> — واللي يعرف الكلمة الأول يكسب أكتر.'],
-  ['🔒', 'الكشف في الآخر بس', '<span class="warn">محدش هيعرف إجابته صح ولا غلط — ولا حتى المتّهم أو الهوست — غير في نهاية اللعبة خالص</span>. والنقط مخفية طول اللعب. في الآخر بتتكشف كل حاجة مرة واحدة: كل كلمة، وكل تخمين، ومين عرفها.'],
+  ['🔒', 'الكشف بعد كل قضية', 'وانت بتلعب القضية، لو سلّمت إجابتك بتتقفل و<span class="warn">محدش يعرف صح ولا غلط غير لما القضية تخلص</span>. أول ما القضية تتقفل بتتكشف الكلمة وكل التخمينات ومين عرفها، وتتحسب النقط ويتحدّث الترتيب.'],
   ['🔄', 'الأدوار بالعدل', '<span class="hl">كل لاعب هيبقى المتّهم نفس عدد المرات</span> — الهوست بيحدد كام مرة. و«عشوائي» بيخلط <b>الترتيب بس</b>، فمحدش ياخد الدور أكتر من غيره.'],
-  ['⚙️', 'الهوست بيحدد', 'الكاتيجوريز، كام مرة كل لاعب يبقى متّهم، <span class="hl">عدد أسئلة كل محقق (2–10)</span>، عدد مرات تبديل الكلمة (0–2)، الترتيب، وهل المتّهم يكتب كلمته، ووقت السؤال والرد.'],
-  ['🎭', 'المتّهم', 'بياخد كلمة من البنك (ويقدر يبدّلها في حدود اللي الهوست سمح بيه) أو يكتب واحدة بنفسه لو مسموح. <span class="warn">لازم يرد بصدق</span> — الكلمة قدامه طول الوقت.'],
+  ['⚙️', 'الهوست بيحدد', 'الكاتيجوريز، كام مرة كل لاعب يبقى متّهم، <span class="hl">عدد أسئلة كل محقق (2–10)</span>، الترتيب، وهل المتّهم يكتب كلمته، ووقت السؤال والرد.'],
+  ['🎭', 'المتّهم', 'بياخد كلمة من البنك، أو يكتب واحدة بنفسه لو الهوست سامح بكده. <span class="warn">لازم يرد بصدق</span> — الكلمة قدامه طول الوقت.'],
   ['🔎', 'الأسئلة بالدور', 'كل جولة = <span class="hl">سؤال واحد من كل محقق</span>. السؤال والرد بيظهروا للكل. وممنوع تكرار سؤال اتسأل قبل كده.'],
   ['🧠', 'ركّز واحفظ', '<span class="warn">مفيش سجل للأسئلة القديمة</span> — كل سؤال بيظهر في وقته وبعدين يعدّي. اللي بيفتكر أكتر بيكسب.'],
   ['💯', 'سلّم ولا تكمّل؟ والنقط', 'آخر كل جولة تختار: تسلّم إجابتك (وتتقفل) ولا تكمّل تحقيق. إجابة صح بعد الجولة 1 = <span class="hl">100</span>، الجولة 2 = <span class="hl">90</span>، وهكذا لحد <span class="hl">10</span>. <b>كل ما تتأخر تقل نقطك</b> — وآخر جولة لازم تسلّم.'],
@@ -608,7 +608,7 @@ const CONAN_STEPS = [
 function showHelp() {
   const ov = document.createElement('div'); ov.className = 'help-ov';
   ov.innerHTML = `<div class="help-card">
-    <div class="help-hero"><img src="/img/conan.webp" alt="" onerror="this.style.display='none'"><h2>المحقق والمتهم</h2><div class="sub">اسأل.. حلل.. واعرف الكلمة 🔎</div></div>
+    <div class="help-hero"><img src="/img/conan.png" alt="" onerror="this.style.display='none'"><h2>المحقق والمتهم</h2><div class="sub">اسأل.. حلل.. واعرف الكلمة 🔎</div></div>
     <div class="help-body">${CONAN_STEPS.map(([e, t, d]) => `<div class="help-step"><div class="help-num">${e}</div><div><h4>${t}</h4><p>${d}</p></div></div>`).join('')}</div>
     <div class="help-foot"><label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label><button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button></div>
   </div>`;

@@ -718,8 +718,7 @@ function renderQuiz(st) {
           : mine ? 'معلش.. جاتك غلط 😅' : 'مجاوبتش المرة دي 🙈'}
       </div>
       <div class="mini-board">
-        ${board.slice(0, 3).map((p, i) => `<div class="mrow ${p.id === me.id ? 'me' : ''}"><span>${['🥇', '🥈', '🥉'][i]}</span><span>${p.avatar} ${esc(p.name)}</span><span class="sc">${p.score}</span></div>`).join('')}
-        ${myRank > 3 ? `<div class="mrow me"><span>#${myRank}</span><span>${(st.players.find(p => p.id === me.id) || {}).avatar || ''} انت</span><span class="sc">${(st.players.find(p => p.id === me.id) || {}).score || 0}</span></div>` : ''}
+        ${board.map((p, i) => `<div class="mrow ${p.id === me.id ? 'me' : ''}"><span>${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</span><span>${p.avatar} ${esc(p.name)}${p.id === me.id ? ' (انت)' : ''}</span><span class="sc">${p.score}</span></div>`).join('')}
       </div>
       ${me.isHost
         ? `<button class="btn primary big mt" id="next-btn">${isLast ? '🏁 شوف النتايج' : '⬅️ السؤال الجاي'}</button>`

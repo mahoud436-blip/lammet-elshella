@@ -220,7 +220,6 @@ function renderLobby(st) {
       ${[
         ['roundsPerPlayer', 'كام دور يلمّح كل لاعب؟', 1, 5],
         ['maxClues', 'عدد التلميحات المسموحة في الجولة (1–10)', 1, 10],
-        ['maxPass', 'كام مرة يعدّي كلمة صعبة؟', 0, 5],
       ].map(([k, label, mn, mx]) => `
         <div class="mt center muted small">${label}</div>
         <div class="stepper">
@@ -310,7 +309,7 @@ function historyPanel(st) {
 function renderClue(st) {
   Snd.play('q'); grabWake(); stopTimer();
   const cluer = st.cluer || {};
-  const bottomLeave = '<button class="btn ghost big mt" id="leave-btn2">🚪 اخرج من الروم</button>';
+  const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
   if (st.youAreCluer) {
     if (st.sub === 'pick') {
       const locked = st.pickMode;
@@ -332,8 +331,7 @@ function renderClue(st) {
             ${(st.catOptions || []).map((c, i) => `<span class="chip click cat-pick ${i === 0 ? 'on' : ''}" data-cat="${c.id}">${c.icon} ${esc(c.name)}</span>`).join('')}
           </div>
           <button class="btn teal big mt" id="pick-own" ${locked === 'bank' ? 'disabled' : ''}>✍️ استخدم كلمتي</button>
-        </div>
-        <button class="btn ghost big mt" id="leave-btn2">🚪 اخرج من الروم</button>`;
+        </div>`;
       $('#pick-bank').onclick = () => act('pickBank');
       let chosenCat = (st.catOptions && st.catOptions[0]) ? st.catOptions[0].id : null;
       $$('.cat-pick').forEach(el => el.onclick = () => { $$('.cat-pick').forEach(x => x.classList.remove('on')); el.classList.add('on'); chosenCat = el.dataset.cat; });
@@ -406,8 +404,7 @@ function renderClue(st) {
           <div class="cluer-hero"><div class="big">🎯</div>
           <div class="clue-status"><span style="font-size:26px">${cluer.avatar || '🎤'}</span> <b>${esc(cluer.name || '')}</b> بيختار الكلمة...</div>
           <div class="muted small">جهّز نفسك 👀</div></div>
-        </div>
-        <button class="btn ghost big mt" id="leave-btn2">🚪 اخرج من الروم</button>`;
+        </div>`;
       const lb1 = $('#leave-btn2'); if (lb1) lb1.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
       return;
     }
@@ -502,8 +499,7 @@ function renderReveal(st) {
       ${st.youReady ? '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>' : `<button class="btn primary big" id="ready-btn">${st.isLastRound ? '🏁 النتيجة النهائية' : '⬅️ الجولة الجاية'}</button>`}
       <div class="muted small mt">جاهزين: <span id="r-n">${st.readyIds.length}</span>/${st.players.filter(p => p.connected).length}</div>
       ${st.you.isHost ? '<button class="btn sm ghost mt" id="force-btn" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button>' : ''}
-    </div>
-    <button class="btn ghost big mt" id="leave-btn2">🚪 اخرج من الروم</button>`;
+    </div>`;
   const rb = $('#ready-btn'); if (rb) rb.onclick = async () => { Snd.play('pick'); const r = await act('readyNext'); if (r.ok) rb.outerHTML = '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>'; };
   const fb = $('#force-btn'); if (fb) fb.onclick = async () => { if (await uiConfirm('تكمّلوا من غير المتأخرين؟', { emoji: '⏭️', okLabel: 'كمّل', danger: false })) act('forceNext'); };
   const lb = $('#leave-btn2'); if (lb) lb.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };

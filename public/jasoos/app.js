@@ -299,7 +299,7 @@ function wordCards(st) {
     <div class="word-card" data-wi="${i}">
       <div class="who">${w.avatar} <b>${esc(w.name)}</b></div>
       <div class="w">${esc(w.word)}</div>
-      <div class="bar" style="width:${Math.round(w.expiresIn / (st.wordShowMs || 7000) * 100)}%"></div>
+      <div class="bar" style="width:${Math.round(w.expiresIn / (st.wordShowMs || 10000) * 100)}%"></div>
     </div>`).join('');
 }
 function armWordTimers(st) {
@@ -308,7 +308,7 @@ function armWordTimers(st) {
     const el = document.querySelector(`.word-card[data-wi="${i}"]`);
     if (!el) return;
     const bar = $('.bar', el);
-    const t0 = Date.now(), dur = w.expiresIn, total = st.wordShowMs || 7000;
+    const t0 = Date.now(), dur = w.expiresIn, total = st.wordShowMs || 10000;
     const tick = () => {
       const remain = dur - (Date.now() - t0);
       if (remain <= 0) { el.classList.add('gone'); bar.style.width = '0%'; return; }
@@ -328,7 +328,7 @@ function turnStrip(st) {
 function renderPlay(st) {
   grabWake(); stopTimers();
   if (st.yourTurn) Snd.play('turn');
-  const bottomLeave = '<button class="btn ghost big mt" id="leave-btn2">🚪 اخرج من الروم</button>';
+  const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
   app.innerHTML = `
     ${header('')}
     <div class="center mb"><span class="chip on">اللفة ${st.round} من ${st.totalRounds}</span> <span class="chip">دور ${st.turnInRound}/${st.turnsPerRound}</span></div>
@@ -344,7 +344,7 @@ function renderPlay(st) {
              <button class="btn primary" id="word-btn">ابعت</button>
            </div>`
         : `<div class="center" style="font-weight:900">${(st.current && st.current.avatar) || '👤'} <b>${esc((st.current && st.current.name) || '')}</b> بيكتب دلوقتي...</div>
-           <div class="center muted small mt">الكلمة بتظهر ${Math.round((st.wordShowMs || 7000) / 1000)} ثواني بس — ركّز واحفظ 🧠</div>`}
+           <div class="center muted small mt">الكلمة بتظهر ${Math.round((st.wordShowMs || 10000) / 1000)} ثواني بس — ركّز واحفظ 🧠</div>`}
     </div>
     <div id="words">${wordCards(st)}</div>
     ${bottomLeave}`;
@@ -374,7 +374,7 @@ function patchPlay(st) {
 function renderVote(st) {
   grabWake(); stopTimers();
   Snd.play('spy');
-  const bottomLeave = '<button class="btn ghost big mt" id="leave-btn2">🚪 اخرج من الروم</button>';
+  const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
   if (st.youAreSpy) {
     app.innerHTML = `
       ${header('')}
@@ -431,7 +431,7 @@ function patchVote(st) { const v = $('#v-n'); if (v) v.textContent = st.votedCou
 /* ===== تخمين الجاسوس ===== */
 function renderSpyGuess(st) {
   stopTimers();
-  const bottomLeave = '<button class="btn ghost big mt" id="leave-btn2">🚪 اخرج من الروم</button>';
+  const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
   if (st.youAreSpy) {
     app.innerHTML = `
       ${header('')}
@@ -549,7 +549,7 @@ const JASOOS_STEPS = [
   ['⚙️', 'الهوست بيحدد', 'الكاتيجوريز، <span class="hl">كام كلمة يكتب كل لاعب</span> (2–6)، عدد الجواسيس (عشوائي سري ولا يحدده)، ووقت الدور.'],
   ['🎲', 'عدد الجواسيس', '3 لاعيبة → جاسوس واحد. من 4 لـ 6 → لحد 2. من 7 وفوق → لحد 3. ولو اخترتوا <span class="hl">عشوائي</span>، محدش يعرف كانوا كام غير في النهاية 🤫'],
   ['✍️', 'دورك', 'تكتب <span class="hl">كلمة واحدة</span> بس توصف الكلمة السرية. <span class="warn">ممنوع تكتب الكلمة نفسها أو حاجة قريبة منها</span>، وممنوع تكرر كلمة اتقالت قبل كده.'],
-  ['⏱️', 'الكلمة بتختفي!', 'كل كلمة بتظهر <span class="hl">7 ثواني بس</span> وبعدين تختفي. ركّز واحفظ — مفيش سجل ترجعله.'],
+  ['⏱️', 'الكلمة بتختفي!', 'كل كلمة بتظهر <span class="hl">10 ثواني بس</span> وبعدين تختفي. ركّز واحفظ — مفيش سجل ترجعله.'],
   ['🤔', 'اللعبة الحقيقية', 'لو وصفت الكلمة بدقة زيادة، الجاسوس هيعرفها ويكسب. ولو غمّضت أوي، صحابك هيشكّوا فيك انت. <span class="hl">لازم توازن</span>.'],
   ['🗳️', 'التصويت', 'بعد ما الكل يخلّص كلماته، كل برئ بيختار <span class="hl">بعدد الجواسيس</span> وياخد <span class="hl">100 نقطة عن كل واحد يصيبه</span>. الجاسوس مبيصوّتش — بيمثّل إنه بيصوّت 😏'],
   ['💯', 'نقط الجاسوس', 'فلت من الكل = <span class="hl">100</span>. فلت من بعضهم بس = <span class="hl">50</span>. قفشوه كلهم = صفر. وبعد التصويت بيخمّن الكلمة — لو عرفها <span class="hl">+100 كمان</span>.'],
