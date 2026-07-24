@@ -482,6 +482,7 @@ function renderReveal(st) {
   stopTimers();
   const R = st.result || {};
   const guessing = !!st.guessOpen;
+  const secretHidden = guessing && st.youAreSpy && !st.youGuessed;
   if (!guessing) Snd.play('win');
   const board = st.players.slice().sort((a, b) => b.score - a.score);
 
@@ -507,7 +508,9 @@ function renderReveal(st) {
     ${header('')}
     <div class="counters"><span class="chip on">الجولة ${st.gameRound}/${st.totalGameRounds}</span></div>
     <div class="card center">
-      <div class="secret-box" style="margin-bottom:12px"><div class="lbl">الكلمة كانت</div><div class="word">${esc(R.secret)}</div><div class="cat mt"><span class="chip">${R.cat ? R.cat.icon + ' ' + R.cat.name : ''}</span></div></div>
+      ${secretHidden
+        ? `<div class="spy-box" style="margin-bottom:12px"><div class="lbl">🤫 انت الجاسوس!</div><div class="word" style="font-size:22px">خمّن الأول عشان تشوفها 👇</div></div>`
+        : `<div class="secret-box" style="margin-bottom:12px"><div class="lbl">الكلمة كانت</div><div class="word">${esc(R.secret)}</div><div class="cat mt"><span class="chip">${R.cat ? R.cat.icon + ' ' + R.cat.name : ''}</span></div></div>`}
       <div style="font-weight:900;font-size:17px">${esc(R.spyMsg || '')}</div>
     </div>
     <div class="card"><h3 class="mb">🕵️ ${R.spyCount === 1 ? 'الجاسوس' : 'الجواسيس'}</h3>${spyCards}</div>
