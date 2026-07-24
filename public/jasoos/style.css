@@ -346,3 +346,7 @@ details.review .rv-body{padding:0 12px 12px;border-top:2px dashed var(--line)}
 .vote-pick .tick{margin-inline-start:auto;font-size:18px;opacity:0}
 .vote-pick.on .tick{opacity:1}
 .act-natural{background:#3b1220;border:2px dashed var(--coral);border-radius:18px;padding:18px;text-align:center;font-weight:800;color:#fca5a5;line-height:1.8}
+
+/* عدّادات فوق */
+.counters{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
+.counters .chip{font-weight:800}

@@ -163,7 +163,7 @@ function renderHome(prefillCode) {
 function render() {
   const st = S.st; if (!st) return;
   updPresence(st);
-  const key = st.phase + '|' + st.round + '|' + (st.phase === 'play' ? (st.yourTurn ? 'me' : 'x') + st.turnInRound : '') + '|' + (st.youVoted ? 'v' : '') + (st.youGuessed ? 'g' : '') + (st.youReady ? 'r' : '');
+  const key = st.phase + '|' + st.round + '|' + (st.phase === 'play' ? (st.yourTurn ? 'me' : 'x') + st.turnInRound : '') + '|' + (st.youVoted ? 'v' : '') + (st.youGuessed ? 'g' : '') + (st.youReady ? 'r' : '') + '|' + (st.phase === 'reveal' ? (st.guessOpen ? 'GO' : 'GD') + (st.gameRound || '') : '');
   if (key === S.viewKey) {
     if (st.phase === 'lobby') return renderLobby(st);
     if (st.phase === 'play') return patchPlay(st);
@@ -228,6 +228,14 @@ function renderLobby(st) {
         <button class="btn" data-plus="rounds" data-mn="2" data-mx="6" ${isHost ? '' : 'disabled'}>+</button>
       </div>
 
+      <div class="mt center muted small">عدد الجولات في الجيم؟ 🔁</div>
+      <div class="stepper">
+        <button class="btn" data-min="games" ${isHost ? '' : 'disabled'}>−</button>
+        <div class="val" style="color:var(--brass-hi)">${s.gameRounds || 3}</div>
+        <button class="btn" data-plus="games" ${isHost ? '' : 'disabled'}>+</button>
+      </div>
+      <div class="center muted small" style="font-size:12px">كل جولة جاسوس جديد والنقط تراكمية</div>
+
       <div class="mt center muted small">عدد الجواسيس</div>
       <div class="row" style="justify-content:center">
         <span class="chip click ${s.spyMode === 'random' ? 'on' : ''} ${isHost ? '' : 'locked'}" data-spymode="random">🎲 عشوائي (سري)</span>
@@ -257,8 +265,8 @@ function renderLobby(st) {
   if (isHost) {
     let cats = s.cats.slice();
     $$('.cat-chip', grid).forEach(el => el.onclick = () => { const id = el.dataset.cat; if (cats.includes(id)) { if (cats.length === 1) return toast('لازم كاتيجوري واحدة على الأقل', 'err'); cats = cats.filter(c => c !== id); } else cats.push(id); el.classList.toggle('on'); $('#cat-count').textContent = cats.length; act('setSettings', { settings: { cats } }); });
-    $$('[data-plus]').forEach(b => b.onclick = () => act('setSettings', { settings: { rounds: Math.min(+b.dataset.mx, s.rounds + 1) } }));
-    $$('[data-min]').forEach(b => b.onclick = () => act('setSettings', { settings: { rounds: Math.max(2, s.rounds - 1) } }));
+    $$('[data-plus]').forEach(b => b.onclick = () => { if (b.dataset.plus === 'games') act('setSettings', { settings: { gameRounds: Math.min(10, (s.gameRounds || 3) + 1) } }); else act('setSettings', { settings: { rounds: Math.min(6, s.rounds + 1) } }); });
+    $$('[data-min]').forEach(b => b.onclick = () => { if (b.dataset.min === 'games') act('setSettings', { settings: { gameRounds: Math.max(1, (s.gameRounds || 3) - 1) } }); else act('setSettings', { settings: { rounds: Math.max(2, s.rounds - 1) } }); });
     $$('[data-spymode]').forEach(el => el.onclick = () => act('setSettings', { settings: { spyMode: el.dataset.spymode } }));
     $$('[data-spycount]').forEach(el => el.onclick = () => { const n = parseInt(el.dataset.spycount, 10); if (n > st.maxSpies) return toast(`بعدد اللاعيبة ده أقصى ${st.maxSpies}`, 'err'); act('setSettings', { settings: { spyCount: n } }); });
     $$('[data-time]').forEach(el => el.onclick = () => act('setSettings', { settings: { turnTime: parseInt(el.dataset.time, 10) } }));
@@ -331,7 +339,7 @@ function renderPlay(st) {
   const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
   app.innerHTML = `
     ${header('')}
-    <div class="center mb"><span class="chip on">اللفة ${st.round} من ${st.totalRounds}</span> <span class="chip">دور ${st.turnInRound}/${st.turnsPerRound}</span></div>
+    <div class="counters"><span class="chip on">الجولة ${st.gameRound}/${st.totalGameRounds}</span> <span class="chip">اللفة ${st.round}/${st.totalRounds}</span> <span class="chip">دور ${st.turnInRound}/${st.turnsPerRound}</span></div>
     ${secretBox(st)}
     ${turnStrip(st)}
     ${st.turnDeadline ? '<div class="timer" id="tbar"><div class="fill" style="width:100%"></div></div>' : ''}
@@ -473,54 +481,57 @@ function patchSpyGuess(st) { const n = $('#sg-n'); if (n) n.textContent = st.spy
 function renderReveal(st) {
   stopTimers();
   const R = st.result || {};
-  Snd.play('win');
+  const guessing = !!st.guessOpen;
+  if (!guessing) Snd.play('win');
   const board = st.players.slice().sort((a, b) => b.score - a.score);
+
+  const spyCards = (R.spies || []).map(s => `
+    <div class="guess-item" style="flex-direction:column;align-items:stretch;gap:6px;background:#3b1220;border-color:#7f2d42">
+      <div style="font-weight:900;font-size:17px">${s.avatar} ${esc(s.name)} 🕵️</div>
+      <div class="muted small">${s.caughtByCount === 0 ? '🎉 فلت من الكل! +' + s.escapePoints : (s.caughtByCount >= s.votersCount ? '😬 الكل قفشه — مفيش نقط هروب' : `قفشه ${s.caughtByCount} من ${s.votersCount} → +${s.escapePoints}`)}</div>
+      ${s.caughtByNames && s.caughtByNames.length ? `<div class="muted small">قفشوه: ${s.caughtByNames.map(esc).join('، ')}</div>` : ''}
+      ${!guessing ? `<div class="muted small">تخمينه للكلمة: ${s.guess ? `«${esc(s.guess)}» ${s.guessedRight ? '✅ +' + s.wordPoints : '❌'}` : '— مخمّنش'}</div><div style="font-weight:900;color:var(--brass-hi)">المجموع: +${s.total}</div>` : ''}
+    </div>`).join('');
+
+  let guessBlock = '';
+  if (guessing) {
+    if (st.youAreSpy && !st.youGuessed)
+      guessBlock = `<div class="card"><div class="center" style="font-weight:900;font-size:17px">انت الجاسوس 🕵️ — خمّن الكلمة!</div><div class="center muted small mb">لو صح تاخد <b style="color:var(--brass-hi)">+100</b> بونس</div><div class="row"><input class="field grow" id="sg-in" maxlength="60" placeholder="تخمينك للكلمة..."><button class="btn primary" id="sg-btn">خمّن</button></div></div>`;
+    else if (st.youAreSpy && st.youGuessed)
+      guessBlock = `<div class="card center"><div class="big-emoji">✅</div><div style="font-weight:900">خمّنت! مستني باقي الجواسيس</div><div class="muted small mt">خمّن <b id="sg-n">${st.spyGuessCount}</b> من ${st.spyTotal}</div></div>`;
+    else
+      guessBlock = `<div class="card center"><div class="big-emoji">👀</div><div style="font-weight:900">الجاسوس بيحاول يخمن الكلمة...</div><div class="muted small mt">خمّن <b id="sg-n">${st.spyGuessCount}</b> من ${st.spyTotal}</div></div>`;
+  }
+
   app.innerHTML = `
     ${header('')}
+    <div class="counters"><span class="chip on">الجولة ${st.gameRound}/${st.totalGameRounds}</span></div>
     <div class="card center">
-      <div class="secret-box" style="margin-bottom:12px">
-        <div class="lbl">الكلمة كانت</div>
-        <div class="word">${esc(R.secret)}</div>
-        <div class="cat mt"><span class="chip">${R.cat ? R.cat.icon + ' ' + R.cat.name : ''}</span></div>
-      </div>
-      <div style="font-weight:900;font-size:17px">كان فيه <span style="color:var(--coral)">${R.spyCount}</span> ${R.spyCount === 1 ? 'جاسوس' : 'جواسيس'} 🕵️</div>
+      <div class="secret-box" style="margin-bottom:12px"><div class="lbl">الكلمة كانت</div><div class="word">${esc(R.secret)}</div><div class="cat mt"><span class="chip">${R.cat ? R.cat.icon + ' ' + R.cat.name : ''}</span></div></div>
+      <div style="font-weight:900;font-size:17px">${esc(R.spyMsg || '')}</div>
     </div>
-    <div class="card">
-      <h3 class="mb">🕵️ الجواسيس</h3>
-      ${(R.spies || []).map(s => `
-        <div class="guess-item" style="flex-direction:column;align-items:stretch;gap:6px;background:#3b1220;border-color:#7f2d42">
-          <div style="font-weight:900;font-size:17px">${s.avatar} ${esc(s.name)}</div>
-          <div class="muted small">${s.caughtByCount === 0 ? '🎉 فلت من الكل! +' + s.escapePoints : (s.caughtByCount >= s.votersCount ? '😬 الكل قفشه — مفيش نقط' : `قفشه ${s.caughtByCount} من ${s.votersCount} → +${s.escapePoints}`)}</div>
-          ${s.caughtByNames && s.caughtByNames.length ? `<div class="muted small">قفشوه: ${s.caughtByNames.map(esc).join('، ')}</div>` : ''}
-          <div class="muted small">تخمينه للكلمة: ${s.guess ? `«${esc(s.guess)}» ${s.guessedRight ? '✅ +' + s.wordPoints : '❌'}` : '— مخمّنش'}</div>
-          <div style="font-weight:900;color:var(--brass-hi)">المجموع: +${s.total}</div>
-        </div>`).join('')}
-    </div>
-    <div class="card">
-      <h3 class="mb">🗳️ تصويت الأبرياء</h3>
-      ${(R.voters || []).map(v => `
-        <div class="guess-item ${v.correctCount ? 'correct' : ''}">
-          <span class="who">${v.avatar} ${esc(v.name)}</span>
-          <span class="gtext">${v.picked.map(esc).join('، ')} ${v.correctCount ? '✅ +' + v.gained : '❌'}</span>
-        </div>`).join('')}
-    </div>
-    <div class="card">
-      <h3 class="mb">📝 الكلمات اللي اتقالت</h3>
-      ${(R.words || []).map(w => `<div class="guess-item ${w.wasSpy ? '' : ''}" style="${w.wasSpy ? 'border-color:var(--coral)' : ''}"><span class="who">${w.avatar} ${esc(w.name)}${w.wasSpy ? ' 🕵️' : ''}</span><span class="gtext">${esc(w.word)}</span></div>`).join('')}
-    </div>
-    <div class="card">
-      <h3 class="mb">📊 النقط</h3>
-      ${board.map((p, i) => `<div class="rank-row ${p.id === st.you.id ? 'me' : ''}"><span class="pos">${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' 🚪' : ''}</span><span class="sc">${p.score}</span></div>`).join('')}
-    </div>
+    <div class="card"><h3 class="mb">🕵️ ${R.spyCount === 1 ? 'الجاسوس' : 'الجواسيس'}</h3>${spyCards}</div>
+    <div class="card"><h3 class="mb">🗳️ تصويت الأبرياء</h3>${(R.voters || []).map(v => `<div class="guess-item ${v.correctCount ? 'correct' : ''}"><span class="who">${v.avatar} ${esc(v.name)}</span><span class="gtext">${v.picked.map(esc).join('، ')} ${v.correctCount ? '✅ +' + v.gained : '❌'}</span></div>`).join('')}</div>
+    ${guessBlock}
+    ${!guessing ? `<div class="card"><h3 class="mb">📝 الكلمات اللي اتقالت</h3>${(R.words || []).map(w => `<div class="guess-item" style="${w.wasSpy ? 'border-color:var(--coral)' : ''}"><span class="who">${w.avatar} ${esc(w.name)}${w.wasSpy ? ' 🕵️' : ''}</span><span class="gtext">${esc(w.word)}</span></div>`).join('')}</div>
+    <div class="card"><h3 class="mb">📊 النقط ${st.isLastRound ? '' : '(تراكمية)'}</h3>${board.map((p, i) => `<div class="rank-row ${p.id === st.you.id ? 'me' : ''}"><span class="pos">${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' 🚪' : ''}</span><span class="sc">${p.score}</span></div>`).join('')}</div>
     <div class="card tight center">
-      ${st.youReady ? '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>' : '<button class="btn primary big" id="ready-btn">🏁 النتيجة النهائية</button>'}
+      ${st.youReady ? '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>' : `<button class="btn primary big" id="ready-btn">${st.isLastRound ? '🏁 النتيجة النهائية' : '⬅️ الجولة الجاية'}</button>`}
       <div class="muted small mt">جاهزين: <span id="r-n">${st.readyIds.length}</span>/${st.players.filter(p => p.connected).length}</div>
       ${st.you.isHost ? '<button class="btn sm ghost mt" id="force-btn" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button>' : ''}
-    </div>`;
-  const rb = $('#ready-btn'); if (rb) rb.onclick = async () => { Snd.play('pick'); const r = await act('readyNext'); if (r.ok) rb.outerHTML = '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>'; };
+    </div>` : ''}`;
+
+  const sgb = $('#sg-btn');
+  if (sgb) {
+    const send = async () => { const v = $('#sg-in').value.trim(); if (!v) return toast('اكتب تخمينك', 'err'); sgb.disabled = true; const r = await act('spyGuess', { text: v }); if (r.ok) Snd.play('ok'); else sgb.disabled = false; };
+    sgb.onclick = send;
+    $('#sg-in').onkeydown = e => { if (e.key === 'Enter' && !sgb.disabled) send(); };
+    setTimeout(() => { const el = $('#sg-in'); if (el) el.focus(); }, 100);
+  }
+  const rb = $('#ready-btn'); if (rb) rb.onclick = async () => { Snd.play('pick'); rb.disabled = true; const r = await act('readyNext'); if (r.ok) rb.outerHTML = '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>'; else rb.disabled = false; };
   const fb = $('#force-btn'); if (fb) fb.onclick = async () => { if (await uiConfirm('تكمّلوا من غير المتأخرين؟', { emoji: '⏭️', okLabel: 'كمّل', danger: false })) act('forceNext'); };
 }
-function patchReveal(st) { const n = $('#r-n'); if (n) n.textContent = st.readyIds.length; }
+function patchReveal(st) { const n = $('#r-n'); if (n) n.textContent = st.readyIds.length; const g = $('#sg-n'); if (g) g.textContent = st.spyGuessCount; }
 
 function confetti() {
   const box = document.createElement('div'); box.className = 'confetti';
@@ -546,7 +557,9 @@ function renderGameover(st) {
 
 const JASOOS_STEPS = [
   ['🎯', 'اللعبة إيه؟', 'الكل شايف <span class="hl">كلمة سرية</span> ما عدا الجاسوس — هو شايف الكاتيجوري بس. بالدور كل واحد بيكتب <span class="hl">كلمة واحدة</span> توصف الكلمة، والجاسوس بيحاول يمثّل إنه عارف. وفي الآخر تصوّتوا مين هو.'],
-  ['⚙️', 'الهوست بيحدد', 'الكاتيجوريز، <span class="hl">كام كلمة يكتب كل لاعب</span> (2–6)، عدد الجواسيس (عشوائي سري ولا يحدده)، ووقت الدور.'],
+  ['⚙️', 'الهوست بيحدد', 'الكاتيجوريز، <span class="hl">كام كلمة يكتب كل لاعب</span> (2–6)، <span class="hl">عدد الجولات في الجيم</span> (1–10)، عدد الجواسيس (عشوائي سري ولا يحدده)، ووقت الدور.'],
+  ['🔁', 'كذا جولة والنقط تراكمية', 'اللعبة بقت <span class="hl">كذا جولة</span> — كل جولة جاسوس عشوائي جديد وكلمة جديدة، والنقط بتتجمع لحد آخر الجيم وبعدين تحليل النتايج.'],
+  ['🎯', 'النتيجة الأول.. بعدين التخمين', 'بعد التصويت بتظهر النتيجة (مين الجاسوس ومين قفشه)، <span class="hl">وبعدها</span> الجاسوس يخمن الكلمة عشان بونس +100 — مش قبل.'],
   ['🎲', 'عدد الجواسيس', '3 لاعيبة → جاسوس واحد. من 4 لـ 6 → لحد 2. من 7 وفوق → لحد 3. ولو اخترتوا <span class="hl">عشوائي</span>، محدش يعرف كانوا كام غير في النهاية 🤫'],
   ['✍️', 'دورك', 'تكتب <span class="hl">كلمة واحدة</span> بس توصف الكلمة السرية. <span class="warn">ممنوع تكتب الكلمة نفسها أو حاجة قريبة منها</span>، وممنوع تكرر كلمة اتقالت قبل كده.'],
   ['⏱️', 'الكلمة بتختفي!', 'كل كلمة بتظهر <span class="hl">10 ثواني بس</span> وبعدين تختفي. ركّز واحفظ — مفيش سجل ترجعله.'],
@@ -558,7 +571,7 @@ const JASOOS_STEPS = [
 function showHelp() {
   const ov = document.createElement('div'); ov.className = 'help-ov';
   ov.innerHTML = `<div class="help-card">
-    <div class="help-hero"><img src="/img/jasoos.webp" alt=""><h2>الجاسوس</h2><div class="sub">مين فيكم مش عارف الكلمة؟ 🕵️</div></div>
+    <div class="help-hero"><img src="/img/jasoos.png" alt=""><h2>الجاسوس</h2><div class="sub">مين فيكم مش عارف الكلمة؟ 🕵️</div></div>
     <div class="help-body">${JASOOS_STEPS.map(([e, t, d]) => `<div class="help-step"><div class="help-num">${e}</div><div><h4>${t}</h4><p>${d}</p></div></div>`).join('')}</div>
     <div class="help-foot"><label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label><button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button></div>
   </div>`;
