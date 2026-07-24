@@ -111,7 +111,7 @@ async function scenarioA() {
   must((await act(first, 'sayWord', { word: w1 })).ok, 'أول كلمة');
   await waitFor(H, s => s.turnInRound === 2, 3000, 'الدور عدّى');
   ok(H.last.wordsShown.some(x => x.word === w1), 'الكلمة ظهرت للكل');
-  ok(H.last.wordsShown[0].expiresIn <= 7000, 'الكلمة ليها مدة انتهاء (7 ثواني)');
+  ok(H.last.wordsShown[0].expiresIn <= 10000, 'الكلمة ليها مدة انتهاء (10 ثواني)');
 
   // منع التكرار
   const second = all.find(p => p.id === H.last.turnOrderIds[1]);

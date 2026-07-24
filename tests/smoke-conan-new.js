@@ -52,7 +52,7 @@ async function playCase(all, no) {
     const st = all.find(p => !p.closed).last;
     if (st.phase !== 'play') break;
     if (st.sub === 'ask') { const a = askerOf(all); if (a) await act(a, 'ask', { text: nextQ() }); await sleep(50); }
-    else if (st.sub === 'answer') { await act(accusedOf(all), 'answer', { value: 'yes' }); await sleep(110); }
+    else if (st.sub === 'answer') { if (st.curQ && !st.curQ.answer) await act(accusedOf(all), 'answer', { value: 'yes' }); await sleep(140); }
     else if (st.sub === 'decide') {
       const last = st.round >= st.totalRounds;
       for (const d of detsOf(all)) { if (last) await act(d, 'submitAnswer', { text: secret }); else await act(d, 'keepGoing'); await sleep(35); }
@@ -69,29 +69,25 @@ async function scenarioMain() {
   const all = [H, P2, P3, P4];
   must((await act(H, 'setSettings', { settings: { cats: ['jobs'], rounds: 2, casesPerPlayer: 1, askOrder: 'turns', accusedOrder: 'turns', allowCustomWord: false, qTime: 0, aTime: 0, maxPass: 5 } })).ok, 'إعدادات');
   await sleep(150);
-  ok(H.last.settings.maxPass === 2, 'تبديل الكلمة اتقصّر لـ 2 (لقيت ' + H.last.settings.maxPass + ')');
   must((await act(H, 'startGame')).ok, 'بدء اللعبة');
   for (const p of all) await waitFor(p, s => s.phase === 'pick', 5000, 'مرحلة الكلمة');
   ok(H.last.totalCases === 4, 'إجمالي القضايا = 4');
-  ok(H.last.passesLeft === 2, 'المتّهم قدامه تبديلين');
-  // النقط متخفية أثناء اللعب
-  ok(H.last.you.score === null && H.last.players.every(x => x.score === null), 'النقط متخفية تمامًا أثناء اللعب 🤫');
+  // النقط ظاهرة أثناء اللعب (كشف بعد كل قضية)
+  ok(typeof H.last.you.score === 'number' && H.last.players.every(x => typeof x.score === 'number'), 'النقط ظاهرة أثناء اللعب ✅');
 
-  // اتنين تبديل + التالت يترفض
+  // التبديل اتلغى خالص
   const acc = accusedOf(all);
-  must((await act(acc, 'rerollWord')).ok, 'تبديل 1');
-  must((await act(acc, 'rerollWord')).ok, 'تبديل 2');
-  ok(!(await act(acc, 'rerollWord')).ok, 'التبديل التالت مرفوض ✅');
+  ok(!(await act(acc, 'rerollWord')).ok, 'التبديل اتلغى — الأكشن مرفوض ✅');
 
   // نلعب كل القضايا الأربعة
   for (let c = 1; c <= 4; c++) {
     await playCase(all, c);
     const st = await waitFor(H, s => s.phase === 'caseEnd', 8000, 'نهاية القضية ' + c);
-    ok(st.phase === 'caseEnd', `القضية ${c} انتهت لشاشة caseEnd (مش reveal)`);
-    // مفيش تسريب: لا كلمة ولا نتيجة ولا نقط في caseEnd
-    ok(detsOf(all).every(d => d.last.secret === undefined), `ق${c}: المحققين مش شايفين الكلمة في نهاية القضية`);
-    ok(st.result === undefined && st.secret === undefined, `ق${c}: مفيش كشف للإجابات في نهاية القضية`);
-    ok(st.you.score === null, `ق${c}: النقط لسه متخفية في نهاية القضية`);
+    ok(st.phase === 'caseEnd', `القضية ${c} وصلت لشاشة الكشف`);
+    // الكشف بعد كل قضية: الكلمة + الإجابات + النقط ظاهرة
+    ok(st.result && typeof st.result.secret === 'string' && st.result.secret.length, `ق${c}: الكلمة اتكشفت بعد القضية`);
+    ok(Array.isArray(st.result.answers), `ق${c}: إجابات المحققين ظاهرة في الكشف`);
+    ok(typeof st.you.score === 'number', `ق${c}: النقط ظاهرة في الكشف`);
     for (const p of all) await act(p, 'readyNext');
     await sleep(200);
   }
@@ -139,7 +135,7 @@ async function scenarioGrace() {
 
 (async () => {
   console.log('🚀 بنشغّل السيرفر للاختبار...');
-  const srv = spawn(process.execPath, ['server.js'], { cwd: __dirname + '/..', env: Object.assign({}, process.env, { PORT: String(PORT), NODE_ENV: 'test', ROOM_TTL_MS: '600000' }), stdio: ['ignore', 'pipe', 'pipe'] });
+  const srv = spawn(process.execPath, ['server.js'], { cwd: __dirname + '/..', env: Object.assign({}, process.env, { PORT: String(PORT), NODE_ENV: 'test', ROOM_TTL_MS: '600000', ANSWER_HOLD_MS: '120' }), stdio: ['ignore', 'pipe', 'pipe'] });
   srv.stderr.on('data', d => process.stderr.write('[srv] ' + d));
   let up = false;
   for (let i = 0; i < 60 && !up; i++) { try { await post('/api/conan/join', {}); up = true; } catch (e) { await sleep(120); } }

@@ -12,7 +12,7 @@ const ROOM_TTL_MS = parseInt(process.env.ROOM_TTL_MS || String(90 * 60 * 1000), 
 const MAX_ROOMS = 300;
 const MIN_PLAYERS = 3;
 const MAX_PLAYERS = 12;
-const WORD_SHOW_MS = 7000;      // الكلمة بتظهر 7 ثواني وتختفي
+const WORD_SHOW_MS = 10000;      // الكلمة بتظهر 7 ثواني وتختفي
 const MAX_WORD_CHARS = 16;      // أقصى طول للكلمة الواحدة
 const AVATARS = ['🕵️','🎩','🔍','🧠','🦊','🐺','🎭','👤','🃏','🔦','🗝️','🧩','⚡','🌑','🎯','🪤','📡','🧿','♠️','🖤','🔮','🚬','🎲','🧊'];
 

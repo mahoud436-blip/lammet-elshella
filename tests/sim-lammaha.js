@@ -194,9 +194,9 @@ async function scenarioB() {
     let sec = cl.last.secret;
     if (rn === 1) {
       // عدّي الكلمة
-      ok(cl.last.passesLeft === 3, '3 مرات عدّي');
+      ok(cl.last.passesLeft === 1, 'مرة عدّي واحدة (ثابتة)');
       must((await act(cl, 'pass')).ok, 'عدّي');
-      await waitFor(cl, s => s.passesLeft === 2, 2000);
+      await waitFor(cl, s => s.passesLeft === 0, 2000);
       ok(cl.last.secret !== sec, 'الكلمة اتغيرت');
       seen.add(sec); // الكلمة المعدّاة برضه محسوبة مستخدمة
       sec = cl.last.secret;

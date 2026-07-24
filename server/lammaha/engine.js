@@ -43,7 +43,7 @@ function createRoom() {
   const room = {
     code, createdAt: now(), lastActivity: now(),
     phase: 'lobby', // lobby | clue | reveal | gameover
-    settings: { cats: ['football', 'places', 'animals', 'food'], level: 'easy', roundsPerPlayer: 2, maxClues: 4, maxPass: 2, clueTime: 0, order: 'random', allowCustomWord: false, maxWords: 3 },
+    settings: { cats: ['football', 'places', 'animals', 'food'], level: 'easy', roundsPerPlayer: 2, maxClues: 4, maxPass: 1, clueTime: 0, order: 'random', allowCustomWord: false, maxWords: 3 },
     hostToken: null, players: new Map(), order: [], ghosts: new Map(),
     usedItems: new Set(),          // الأسماء اللي اتلعبت في الروم — عمرها ما بتتصفر
     plan: [], roundIdx: 0,
@@ -436,7 +436,6 @@ module.exports = {
       if (typeof s.level === 'string' && BANK.isLevel(s.level)) room.settings.level = s.level;
       if (typeof s.allowCustomWord === 'boolean') room.settings.allowCustomWord = s.allowCustomWord;
       const mw = parseInt(s.maxWords, 10); if (Number.isInteger(mw) && mw >= 1 && mw <= 3) room.settings.maxWords = mw;
-      const mp = parseInt(s.maxPass, 10); if (Number.isInteger(mp) && mp >= 0 && mp <= 5) room.settings.maxPass = mp;
       const ct = parseInt(s.clueTime, 10); if (Number.isInteger(ct) && (ct === 0 || (ct >= 15 && ct <= 180))) room.settings.clueTime = ct;
       if (s.order === 'random' || s.order === 'turns') room.settings.order = s.order;
       broadcast(room);

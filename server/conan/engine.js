@@ -14,6 +14,7 @@ const MIN_PLAYERS = 3;
 const MAX_PLAYERS = 12;
 const MAX_Q_CHARS = 90;
 const NO_ANSWER_PENALTY = 10;
+const ANSWER_HOLD_MS = parseInt(process.env.ANSWER_HOLD_MS || '4000', 10);   // وقت عرض رد المتّهم قبل السؤال اللي بعده
 const AVATARS = ['🕵️','🔎','🧠','🎩','📎','🗂️','🧩','💡','📌','🔦','🗝️','⚖️','📖','🖇️','🧭','🪞','🎯','📝','🔬','🧵','♟️','🫖','🪄','📮'];
 
 let NET = { ips: [], port: 3000, hosted: false };
@@ -35,10 +36,10 @@ function createRoom() {
     phase: 'lobby',   // lobby | pick | play | caseEnd | gameover
     sub: 'ask',       // ask | answer | decide
     settings: { cats: ['living', 'food', 'things', 'places'], rounds: 6, casesPerPlayer: 1, askOrder: 'turns', accusedOrder: 'turns',
-                allowCustomWord: false, maxPass: 2, qTime: 0, aTime: 0 },
+                allowCustomWord: false, qTime: 0, aTime: 0 },
     hostToken: null, players: new Map(), order: [], ghosts: new Map(),
     usedItems: new Set(), plan: [], caseIdx: 0,
-    accused: null, item: null, pickMode: null, passesUsed: 0,
+    accused: null, item: null, pickMode: null,
     round: 0, askOrder: [], askIdx: 0,
     curQ: null,          // {token, text, at, answer}
     history: [],         // كل الأسئلة والإجابات (للكشف في الآخر بس)
@@ -98,9 +99,9 @@ function viewFor(room, p) {
     round: room.round, totalRounds: room.settings.rounds,
     caseNo: room.caseIdx + 1, totalCases: room.plan.length || 0,
     players: allPlayers(room).map(x => ({ id: x.id, name: x.name, avatar: x.avatar, isHost: isHost(room, x),
-      connected: x.connected, away: !!x.away, left: !!x.left, score: room.phase === 'gameover' ? x.score : null,
+      connected: x.connected, away: !!x.away, left: !!x.left, score: x.score,
       submitted: room.submissions.has(x.token), isAccused: x.token === room.accused })),
-    you: { id: p.id, isHost: isHost(room, p), score: room.phase === 'gameover' ? p.score : null },
+    you: { id: p.id, isHost: isHost(room, p), score: p.score },
     paused: room.paused ? { reason: room.paused.reason, until: room.paused.until } : null,
   };
   const inGame = room.phase === 'pick' || room.phase === 'play';
@@ -113,7 +114,6 @@ function viewFor(room, p) {
   }
   if (room.phase === 'pick') {
     st.pickMode = room.pickMode;
-    st.passesLeft = Math.max(0, room.settings.maxPass - room.passesUsed);
     st.catOptions = room.settings.cats.map(c => BANK.catMeta(c));
     st.allowCustomWord = room.settings.allowCustomWord;
   }
@@ -144,11 +144,8 @@ function viewFor(room, p) {
     }
   }
   if (room.phase === 'caseEnd') {
-    const acc = room.accused ? nameOf(room, room.accused) : null;
-    st.caseEnd = {
-      accusedName: acc ? acc.name : '—', accusedAvatar: acc ? acc.avatar : '👤',
-      isLast: room.caseIdx + 1 >= room.plan.length,
-    };
+    st.result = room.lastResult;
+    st.caseEnd = { isLast: room.caseIdx + 1 >= room.plan.length };
     st.readyIds = [...room.readyNext].map(t => (room.players.get(t) || {}).id).filter(Boolean);
     st.youReady = room.readyNext.has(p.token);
     st.readyTotal = connectedPlayers(room).length;
@@ -229,7 +226,7 @@ function startCase(room) {
   room.accused = tok;
   acc.stat.accusedTimes++;
   room.round = 0; room.history = []; room.submissions = new Map(); room.decided = new Set();
-  room.penalty = 0; room.curQ = null; room.item = null; room.pickMode = null; room.passesUsed = 0;
+  room.penalty = 0; room.curQ = null; room.item = null; room.pickMode = null;
   if (!room.settings.allowCustomWord) {
     const it = pickItem(room);
     if (it) { room.item = it; room.usedItems.add(it.id); }
@@ -293,7 +290,8 @@ function timeoutAnswer(room) {
   room.penalty += NO_ANSWER_PENALTY;
   room.curQ.answer = 'none';
   room.history.push({ round: room.round, token: room.curQ.token, text: room.curQ.text, answer: 'none', penalty: true });
-  nextAsker(room);
+  broadcast(room);
+  setTimeout(() => { if (room.phase === 'play' && room.sub === 'answer' && room.curQ && room.curQ.answer) nextAsker(room); }, ANSWER_HOLD_MS);
 }
 
 function nextAsker(room) {
@@ -538,7 +536,6 @@ module.exports = {
       if (s.askOrder === 'random' || s.askOrder === 'turns') room.settings.askOrder = s.askOrder;
       if (s.accusedOrder === 'random' || s.accusedOrder === 'turns') room.settings.accusedOrder = s.accusedOrder;
       if (typeof s.allowCustomWord === 'boolean') room.settings.allowCustomWord = s.allowCustomWord;
-      const mp = parseInt(s.maxPass, 10); if (Number.isInteger(mp) && mp >= 0 && mp <= 2) room.settings.maxPass = mp;
       const qt = parseInt(s.qTime, 10); if (qt === 0 || qt === 15 || qt === 30 || qt === 45) room.settings.qTime = qt;
       const at = parseInt(s.aTime, 10); if (at === 0 || at === 15 || at === 30) room.settings.aTime = at;
       broadcast(room);
@@ -577,18 +574,6 @@ module.exports = {
       broadcast(room);
       return R(200, { ok: true });
     }
-    if (A === 'rerollWord') {
-      if (room.phase !== 'pick') return R(400, { ok: false, error: 'مش وقتها' });
-      if (room.accused !== p.token) return R(403, { ok: false, error: 'المتّهم بس' });
-      if (room.pickMode !== 'bank') return R(400, { ok: false, error: 'التبديل من البنك بس' });
-      if (room.passesUsed >= room.settings.maxPass) return R(400, { ok: false, error: 'خلّصت مرات التبديل' });
-      const it = pickItem(room);
-      if (!it) return R(400, { ok: false, error: 'البنك خلص' });
-      room.passesUsed++;
-      room.item = it; room.usedItems.add(it.id);
-      broadcast(room);
-      return R(200, { ok: true });
-    }
     if (A === 'startPlay') {
       if (room.phase !== 'pick') return R(400, { ok: false, error: 'مش وقتها' });
       if (room.accused !== p.token) return R(403, { ok: false, error: 'المتّهم بس' });
@@ -619,7 +604,7 @@ module.exports = {
       room.history.push({ round: room.round, token: room.curQ.token, text: room.curQ.text, answer: v });
       clearTimer(room);
       broadcast(room);
-      setTimeout(() => { if (room.phase === 'play' && room.sub === 'answer') nextAsker(room); }, 1200);
+      setTimeout(() => { if (room.phase === 'play' && room.sub === 'answer' && room.curQ && room.curQ.answer) nextAsker(room); }, ANSWER_HOLD_MS);
       return R(200, { ok: true });
     }
     /* ===== التسليم أو الاستمرار ===== */

@@ -2,7 +2,7 @@
 /* بنك «الجاسوس»: 7 كاتيجوريز × 200 كلمة، بمطابقة متسامحة لتخمين الجاسوس */
 const CATS = [
   { id: 'sports',    icon: '⚽',  name: 'رياضة',        file: './sports' },
-  { id: 'geo',       icon: '🌍',  name: 'جغرافيا',      file: './geo' },
+  { id: 'geo',       icon: '🌍',  name: 'بلاد ومدن',     file: './geo' },
   { id: 'food',      icon: '🍔',  name: 'أكل وشرب',     file: './food' },
   { id: 'animals',   icon: '🐾',  name: 'حيوانات',      file: './animals' },
   { id: 'celebs',    icon: '🎬',  name: 'مشاهير وفن',   file: './celebs' },
