@@ -66,7 +66,7 @@ const S = {
 
 async function api(path, body) {
   try { const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); return await r.json(); }
-  catch (e) { return { ok: false, error: 'مفيش اتصال بالسيرفر 📡' }; }
+  catch (e) { return { ok: false, netErr: true, error: 'مفيش اتصال بالسيرفر 📡' }; }
 }
 async function act(action, extra) {
   if (!S.save) return { ok: false };
@@ -116,11 +116,12 @@ function header(sub) {
 }
 function bindHeader() {}
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('#help-btn,#home-btn,#mute-btn,#leave-fab');
+  const t = e.target.closest('#help-btn,#home-btn,#mute-btn,#leave-fab,#force-play');
   if (!t) return;
   if (t.id === 'help-btn') { Snd.ensure(); showHelp(); }
   else if (t.id === 'home-btn') { if (S.save && !await uiConfirm('ترجع للمّة؟ مكانك في الروم محفوظ', { emoji: '🏠', okLabel: 'ارجع', cancelLabel: 'فضّل هنا' })) return; location.href = '/'; }
   else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
+  else if (t.id === 'force-play') { if (await uiConfirm('تكمّلوا من غير اللي متأخر؟ اللعبة هتمشي من غيره وسكوره بيفضل محسوب', { emoji: '⏭️', title: 'كمّلوا من غيره', okLabel: 'كمّل', cancelLabel: 'استنى' })) act('forceNext'); }
   else if (t.id === 'leave-fab') { if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', title: 'خروج', okLabel: 'اخرج', cancelLabel: 'استنى' })) return; await act('leave'); leaveLocal(); }
 });
 function updPresence(st) {
@@ -336,7 +337,8 @@ function turnStrip(st) {
 function renderPlay(st) {
   grabWake(); stopTimers();
   if (st.yourTurn) Snd.play('turn');
-  const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
+  // زرار طوارئ للهوست — يكمّل اللعبة لو حد فصل/سايب موبايله وواقف اللعب
+  const bottomLeave = st.you.isHost ? '<div class="card tight"><button class="btn sm ghost" id="force-play" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button></div>' : '';
   app.innerHTML = `
     ${header('')}
     <div class="counters"><span class="chip on">الجولة ${st.gameRound}/${st.totalGameRounds}</span> <span class="chip">اللفة ${st.round}/${st.totalRounds}</span> <span class="chip">دور ${st.turnInRound}/${st.turnsPerRound}</span></div>
@@ -382,7 +384,8 @@ function patchPlay(st) {
 function renderVote(st) {
   grabWake(); stopTimers();
   Snd.play('spy');
-  const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
+  // زرار طوارئ للهوست — يكمّل اللعبة لو حد فصل/سايب موبايله وواقف اللعب
+  const bottomLeave = st.you.isHost ? '<div class="card tight"><button class="btn sm ghost" id="force-play" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button></div>' : '';
   if (st.youAreSpy) {
     app.innerHTML = `
       ${header('')}
@@ -439,7 +442,8 @@ function patchVote(st) { const v = $('#v-n'); if (v) v.textContent = st.votedCou
 /* ===== تخمين الجاسوس ===== */
 function renderSpyGuess(st) {
   stopTimers();
-  const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
+  // زرار طوارئ للهوست — يكمّل اللعبة لو حد فصل/سايب موبايله وواقف اللعب
+  const bottomLeave = st.you.isHost ? '<div class="card tight"><button class="btn sm ghost" id="force-play" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button></div>' : '';
   if (st.youAreSpy) {
     app.innerHTML = `
       ${header('')}
@@ -550,7 +554,7 @@ function renderGameover(st) {
   app.innerHTML = `${header('خلصت اللعبة! 🎉')}
     <div class="bunting teal"></div>
     <div class="card center"><h2 class="display" style="font-size:30px">🏆 نتيجة السهرة</h2><div class="podium">${pod(1)}${pod(0)}${pod(2)}</div></div>
-    <div class="card"><h3 class="mb">🎖️ الجوايز</h3>${R.awards.map(a => `<div class="award"><span class="aic">${a.icon}</span><div><div class="at">${esc(a.title)}: ${esc(a.who)}</div><div class="ad">${esc(a.detail)}</div></div></div>`).join('')}</div>
+    <div class="card"><h3 class="mb">🏅 الجوايز</h3>${R.awards.map(a => `<div class="award"><span class="aic">${a.icon}</span><div><div class="at">${esc(a.title)}: ${esc(a.who)}</div><div class="ad">${esc(a.detail)}</div></div></div>`).join('')}</div>
     <div class="card"><h3 class="mb">📊 الترتيب</h3>${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">🚪</span>' : ''}</span><span class="muted small">(${p.caught} قفشه · ${p.escaped} فلت)</span><span class="sc">${p.score}</span></div>`).join('')}</div>
     ${me.isHost ? '<button class="btn primary big" id="again-btn">🔄 نلعب تاني</button>' : `<div class="card tight center">جولة تانية؟ <b>${esc(hostP.name || '')}</b> 👑</div>`}
     <button class="btn ghost big mt" id="leave-btn">🏠 خروج</button>`;
@@ -583,14 +587,41 @@ function showHelp() {
   $('#help-ok').onclick = close; ov.onclick = e => { if (e.target === ov) close(); };
 }
 
+/* شاشة إعادة الاتصال — بتظهر لو النت وقع وإحنا بنحاول نرجّع اللاعب لنفس مكانه من غير ما نفقد السيشن */
+function renderConnecting() {
+  S.sig = 'reconnecting'; S.viewKey = 'reconnecting';
+  if (typeof stopTimers === 'function') stopTimers();
+  if (typeof stopTimer === 'function') stopTimer();
+  app.innerHTML = `
+    ${header('بنرجّعك للروم...')}
+    <div class="card center">
+      <div style="font-size:46px;margin:8px 0">📡</div>
+      <div style="font-size:20px;font-weight:800">بنحاول نرجّعك للّعبة...</div>
+      <div class="muted small mt" style="line-height:1.9">مكانك في الروم محفوظ — أول ما النت يرجع هتكمّل من نفس المكان أوتوماتيك.</div>
+      <button class="btn teal big mt" id="reco-retry">🔄 جرّب دلوقتي</button>
+      <button class="btn ghost mt" id="reco-home">ارجع للمّة</button>
+    </div>`;
+  const rb = $('#reco-retry'); if (rb) rb.onclick = async () => {
+    if (!S.save) return renderHome('');
+    const r = await api('/api/jasoos/join', { code: S.save.code, token: S.save.token });
+    if (r.ok) { openStream(); return; }
+    if (r.netErr) { toast('لسه مفيش اتصال 📡', 'err'); return; }
+    LS.del('jasoos_save'); S.save = null; toast(r.gone ? 'الروم القديم خلص' : (r.error || 'مش قادر ترجع'), 'err'); renderHome('');
+  };
+  const hb = $('#reco-home'); if (hb) hb.onclick = () => leaveLocal();
+  const nb = $('#net-banner'); if (nb) nb.classList.remove('hidden');
+}
+
 (async function boot() {
   document.body.addEventListener('pointerdown', () => Snd.ensure(), { once: true });
   const urlRoom = new URLSearchParams(location.search).get('room');
   if (S.save && S.save.code && S.save.token) {
-    const r = await api('/api/jasoos/join', { code: S.save.code, token: S.save.token });
+    let r = await api('/api/jasoos/join', { code: S.save.code, token: S.save.token });
+    for (let i = 0; i < 3 && r.netErr; i++) { await new Promise(res => setTimeout(res, 700 * (i + 1))); r = await api('/api/jasoos/join', { code: S.save.code, token: S.save.token }); }
     if (r.ok) { openStream(); return; }
+    if (r.netErr) { openStream(); renderConnecting(); return; }
     LS.del('jasoos_save'); S.save = null;
-    if (r.gone) toast('الروم القديم خلص', 'err');
+    if (r.gone) toast('الروم القديم خلص', 'err'); else if (r.error) toast(r.error, 'err');
   }
   renderHome(urlRoom || '');
   if (!LS.get('lamma_help_off_jasoos', false)) setTimeout(showHelp, 350);

@@ -113,7 +113,7 @@ async function api(path, body) {
   try {
     const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
     return await r.json();
-  } catch (e) { return { ok: false, error: 'مفيش اتصال بالسيرفر 📡' }; }
+  } catch (e) { return { ok: false, netErr: true, error: 'مفيش اتصال بالسيرفر 📡' }; }
 }
 async function act(action, extra) {
   if (!S.save) return { ok: false };
@@ -792,7 +792,7 @@ function renderResults(st) {
       <div class="podium">${pod(1)}${pod(0)}${pod(2)}</div>
     </div>
     <div class="card">
-      <h3 class="mb">🎖️ الجوايز</h3>
+      <h3 class="mb">🏅 الجوايز</h3>
       ${R.awards.map(a => `<div class="award"><span class="aic">${a.icon}</span><div><div class="at">${esc(a.title)}: ${esc(a.who)}</div><div class="ad">${esc(a.detail)}</div></div></div>`).join('')}
       ${R.hardest ? `<div class="award"><span class="aic">🧱</span><div><div class="at">أصعب سؤال (من عند ${esc(R.hardest.owner)})</div><div class="ad">«${esc(R.hardest.text)}» — ${esc(R.hardest.detail)}</div></div></div>` : ''}
     </div>
@@ -833,14 +833,41 @@ function renderResults(st) {
 }
 
 /* ======================= البداية ======================= */
+/* شاشة إعادة الاتصال — بتظهر لو النت وقع وإحنا بنحاول نرجّع اللاعب لنفس مكانه من غير ما نفقد السيشن */
+function renderConnecting() {
+  S.sig = 'reconnecting'; S.viewKey = 'reconnecting';
+  if (typeof stopTimers === 'function') stopTimers();
+  if (typeof stopTimer === 'function') stopTimer();
+  app.innerHTML = `
+    ${header('بنرجّعك للروم...')}
+    <div class="card center">
+      <div style="font-size:46px;margin:8px 0">📡</div>
+      <div style="font-size:20px;font-weight:800">بنحاول نرجّعك للّعبة...</div>
+      <div class="muted small mt" style="line-height:1.9">مكانك في الروم محفوظ — أول ما النت يرجع هتكمّل من نفس المكان أوتوماتيك.</div>
+      <button class="btn teal big mt" id="reco-retry">🔄 جرّب دلوقتي</button>
+      <button class="btn ghost mt" id="reco-home">ارجع للمّة</button>
+    </div>`;
+  const rb = $('#reco-retry'); if (rb) rb.onclick = async () => {
+    if (!S.save) return renderHome('');
+    const r = await api('/api/tahadi/join', { code: S.save.code, token: S.save.token });
+    if (r.ok) { openStream(); return; }
+    if (r.netErr) { toast('لسه مفيش اتصال 📡', 'err'); return; }
+    LS.del('tahadi_save'); S.save = null; toast(r.gone ? 'الروم القديم خلص' : (r.error || 'مش قادر ترجع'), 'err'); renderHome('');
+  };
+  const hb = $('#reco-home'); if (hb) hb.onclick = () => leaveLocal();
+  const nb = $('#net-banner'); if (nb) nb.classList.remove('hidden');
+}
+
 (async function boot() {
   document.body.addEventListener('pointerdown', () => Snd.ensure(), { once: true });
   const urlRoom = new URLSearchParams(location.search).get('room');
   if (S.save && S.save.code && S.save.token) {
-    const r = await api('/api/tahadi/join', { code: S.save.code, token: S.save.token });
+    let r = await api('/api/tahadi/join', { code: S.save.code, token: S.save.token });
+    for (let i = 0; i < 3 && r.netErr; i++) { await new Promise(res => setTimeout(res, 700 * (i + 1))); r = await api('/api/tahadi/join', { code: S.save.code, token: S.save.token }); }
     if (r.ok) { openStream(); return; }
+    if (r.netErr) { openStream(); renderConnecting(); return; }
     LS.del('tahadi_save'); S.save = null;
-    if (r.gone) toast('الروم القديم خلص', 'err');
+    if (r.gone) toast('الروم القديم خلص', 'err'); else if (r.error) toast(r.error, 'err');
   }
   renderHome(urlRoom || '');
 })();

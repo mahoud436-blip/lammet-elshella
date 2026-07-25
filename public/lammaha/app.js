@@ -67,13 +67,23 @@ const S = {
 
 async function api(path, body) {
   try { const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); return await r.json(); }
-  catch (e) { return { ok: false, error: 'مفيش اتصال بالسيرفر 📡' }; }
+  catch (e) { return { ok: false, netErr: true, error: 'مفيش اتصال بالسيرفر 📡' }; }
 }
 async function act(action, extra) {
   if (!S.save) return { ok: false };
   const r = await api('/api/lammaha/action', Object.assign({ code: S.save.code, token: S.save.token, action }, extra || {}));
   if (!r.ok && r.error) toast(r.error, 'err');
   return r;
+}
+
+/* قفل الزرار وقت التنفيذ — يمنع الدوس المتكرر (زي ما بيحصل مع «بدّلها») ويرجّعه يشتغل بعدها */
+function lockBtn(btn, fn) {
+  if (!btn) return;
+  btn.onclick = async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    try { await fn(); } catch (e) {} finally { setTimeout(() => { if (btn && btn.isConnected) btn.disabled = false; }, 450); }
+  };
 }
 
 function openStream() {
@@ -117,11 +127,12 @@ function header(sub) {
 }
 function bindHeader() {}
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('#help-btn,#home-btn,#mute-btn,#leave-fab');
+  const t = e.target.closest('#help-btn,#home-btn,#mute-btn,#leave-fab,#force-play');
   if (!t) return;
   if (t.id === 'help-btn') { Snd.ensure(); showHelp(); }
   else if (t.id === 'home-btn') { if (S.save && !await uiConfirm('ترجع للمّة؟ مكانك في الروم محفوظ', { emoji: '🏠', okLabel: 'ارجع', cancelLabel: 'فضّل هنا' })) return; location.href = '/'; }
   else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
+  else if (t.id === 'force-play') { if (await uiConfirm('تكمّلوا من غير اللي متأخر؟ اللعبة هتمشي من غيره وسكوره بيفضل محسوب', { emoji: '⏭️', title: 'كمّلوا من غيره', okLabel: 'كمّل', cancelLabel: 'استنى' })) act('forceNext'); }
   else if (t.id === 'leave-fab') { if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب في النتيجة', { emoji: '🚪', title: 'خروج', okLabel: 'اخرج', cancelLabel: 'استنى' })) return; await act('leave'); leaveLocal(); }
 });
 function updPresence(st) {
@@ -164,7 +175,9 @@ function renderHome(prefillCode) {
 function render() {
   const st = S.st; if (!st) return;
   updPresence(st);
-  const key = st.phase + '|' + st.round + '|' + (st.phase === 'clue' ? (st.youAreCluer ? 'c' : 'g') + st.sub + st.cluesGiven + (st.pickMode || '') + (st.youGuessed ? 'y' : '') : '') + '|' + (st.youReady ? 'r' : '');
+  // الكلمة السرية وعدد مرات التبديل جوه المفتاح — عشان لما الملمّح يبدّل الكلمة
+  // الشاشة تتبني من الأول وتوريه الكلمة الجديدة على طول (مش تفضل على القديمة).
+  const key = st.phase + '|' + st.round + '|' + (st.phase === 'clue' ? (st.youAreCluer ? 'c' : 'g') + st.sub + st.cluesGiven + (st.pickMode || '') + (st.youGuessed ? 'y' : '') + '|' + (st.secret || '') + '|' + (st.passesLeft == null ? '' : st.passesLeft) : '') + '|' + (st.youReady ? 'r' : '');
   if (key === S.viewKey) {
     if (st.phase === 'lobby') return renderLobby(st);
     if (st.phase === 'clue') return patchClue(st);
@@ -227,7 +240,7 @@ function renderLobby(st) {
           <div class="val" style="color:var(--brass-hi)">${s[k]}</div>
           <button class="btn" data-plus="${k}" data-mn="${mn}" data-mx="${mx}" ${isHost ? '' : 'disabled'}>+</button>
         </div>`).join('')}
-      <div class="mt center muted small">مستوى الأسماء 🎚️</div>
+      <div class="mt center muted small">مستوى الأسماء 📊</div>
       <div class="row wrap" style="justify-content:center">
         ${(st.levels || []).map(l => `<span class="chip click ${s.level === l.id ? 'on' : ''} ${isHost ? '' : 'locked'}" data-level="${l.id}">${l.icon} ${l.name}</span>`).join('')}
       </div>
@@ -309,7 +322,8 @@ function historyPanel(st) {
 function renderClue(st) {
   Snd.play('q'); grabWake(); stopTimer();
   const cluer = st.cluer || {};
-  const bottomLeave = ''; // الخروج أثناء اللعب من زر الباب فوق
+  // زرار طوارئ للهوست — يكمّل اللعبة لو حد فصل/سايب موبايله وواقف اللعب
+  const bottomLeave = st.you.isHost ? '<div class="card tight"><button class="btn sm ghost" id="force-play" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button></div>' : '';
   if (st.youAreCluer) {
     if (st.sub === 'pick') {
       const locked = st.pickMode;
@@ -373,7 +387,7 @@ function renderClue(st) {
         const r = await act('submitHint', { text });
         if (r.ok) Snd.play('clue');
       };
-      const pb = $('#pass-btn'); if (pb) pb.onclick = () => act('pass');
+      const pb = $('#pass-btn'); if (pb) lockBtn(pb, async () => { const r = await act('pass'); if (r.ok) Snd.play('pick'); });
       const gb = $('#giveup-btn'); if (gb) gb.onclick = async () => { if (await uiConfirm('تقفل الجولة من غير ما حد ياخد نقط؟', { emoji: '🏳️', okLabel: 'اقفل' })) act('giveUp'); };
     } else {
       app.innerHTML = `
@@ -429,7 +443,7 @@ function renderClue(st) {
         <div class="card">
           <div class="clue-status"><span class="pts-chip">جاوب صح دلوقتي = ${st.tier} نقطة</span> <span class="chip">${st.cat ? st.cat.icon + ' ' + st.cat.name : ''}</span></div>
           ${st.youGuessed
-            ? `<div class="center mt" style="font-weight:900;color:var(--brass-hi)">تخمينك: «${esc(st.yourGuessText)}»</div>
+            ? `<div class="center mt" id="your-guess" style="font-weight:900;color:var(--brass-hi)">تخمينك: «${esc(st.yourGuessText)}»</div>
                <div class="center muted small mt">تقدر تعدّله طول ما فيه حد لسه بيخمّن ✏️</div>
                <div class="row mt">
                  <input class="field grow" id="guess-in" maxlength="60" value="${esc(st.yourGuessText)}">
@@ -452,7 +466,7 @@ function renderClue(st) {
         const r = await act('guess', { text: v });
         if (r.ok) Snd.play('pick');
       };
-      const gb = $('#guess-btn'); if (gb) gb.onclick = send;
+      const gb = $('#guess-btn'); if (gb) lockBtn(gb, send);
       const gi = $('#guess-in'); if (gi) gi.onkeydown = e => { if (e.key === 'Enter') send(); };
     }
   }
@@ -464,6 +478,8 @@ function avatarsOf(st, ids) {
 function patchClue(st) {
   const n = $('#g-n'); if (n) n.textContent = (st.guessedIds || []).length;
   const gs = $('#g-strip'); if (gs) gs.innerHTML = avatarsOf(st, st.guessedIds);
+  // تخمين اللاعب نفسه لازم يتحدّث لما يعدّله — من غير ما نعيد بناء الشاشة عشان الكتابة متضيعش
+  const yg = $('#your-guess'); if (yg && st.yourGuessText != null) yg.textContent = 'تخمينك: «' + st.yourGuessText + '»';
   const lg = $('#live-g'); if (lg && st.liveGuesses) lg.innerHTML = st.liveGuesses.map(g => `<div class="guess-item"><span class="who">${g.avatar} ${esc(g.name)}</span><span class="gtext">${esc(g.text)}</span></div>`).join('') || '<div class="muted small center">لسه محدش خمّن...</div>';
 }
 
@@ -520,7 +536,7 @@ function renderGameover(st) {
   app.innerHTML = `${header('خلصت اللعبة! 🎉')}
     <div class="bunting teal"></div>
     <div class="card center"><h2 class="display" style="font-size:30px">🏆 نتيجة السهرة</h2><div class="podium">${pod(1)}${pod(0)}${pod(2)}</div></div>
-    <div class="card"><h3 class="mb">🎖️ الجوايز</h3>${R.awards.map(a => `<div class="award"><span class="aic">${a.icon}</span><div><div class="at">${esc(a.title)}: ${esc(a.who)}</div><div class="ad">${esc(a.detail)}</div></div></div>`).join('')}</div>
+    <div class="card"><h3 class="mb">🏅 الجوايز</h3>${R.awards.map(a => `<div class="award"><span class="aic">${a.icon}</span><div><div class="at">${esc(a.title)}: ${esc(a.who)}</div><div class="ad">${esc(a.detail)}</div></div></div>`).join('')}</div>
     <div class="card"><h3 class="mb">📊 الترتيب</h3>${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">🚪</span>' : ''}</span><span class="muted small">(${p.solved} جابها · ${p.cluedSuccess} وصّل)</span><span class="sc">${p.score}</span></div>`).join('')}</div>
     <div class="card"><h3 class="mb">📚 مراجعة الجولات</h3>${R.review.map(rd => `
       <details class="review"><summary><span>${rd.cat ? rd.cat.icon : '🎤'}</span><span>ج${rd.round}: ${esc(rd.secret)}</span><span class="muted small" style="margin-inline-start:auto">${rd.solved ? '✅' : '❌'}</span></summary>
@@ -554,14 +570,41 @@ function showHelp() {
   $('#help-ok').onclick = close; ov.onclick = e => { if (e.target === ov) close(); };
 }
 
+/* شاشة إعادة الاتصال — بتظهر لو النت وقع وإحنا بنحاول نرجّع اللاعب لنفس مكانه من غير ما نفقد السيشن */
+function renderConnecting() {
+  S.sig = 'reconnecting'; S.viewKey = 'reconnecting';
+  if (typeof stopTimers === 'function') stopTimers();
+  if (typeof stopTimer === 'function') stopTimer();
+  app.innerHTML = `
+    ${header('بنرجّعك للروم...')}
+    <div class="card center">
+      <div style="font-size:46px;margin:8px 0">📡</div>
+      <div style="font-size:20px;font-weight:800">بنحاول نرجّعك للّعبة...</div>
+      <div class="muted small mt" style="line-height:1.9">مكانك في الروم محفوظ — أول ما النت يرجع هتكمّل من نفس المكان أوتوماتيك.</div>
+      <button class="btn teal big mt" id="reco-retry">🔄 جرّب دلوقتي</button>
+      <button class="btn ghost mt" id="reco-home">ارجع للمّة</button>
+    </div>`;
+  const rb = $('#reco-retry'); if (rb) rb.onclick = async () => {
+    if (!S.save) return renderHome('');
+    const r = await api('/api/lammaha/join', { code: S.save.code, token: S.save.token });
+    if (r.ok) { openStream(); return; }
+    if (r.netErr) { toast('لسه مفيش اتصال 📡', 'err'); return; }
+    LS.del('lammaha_save'); S.save = null; toast(r.gone ? 'الروم القديم خلص' : (r.error || 'مش قادر ترجع'), 'err'); renderHome('');
+  };
+  const hb = $('#reco-home'); if (hb) hb.onclick = () => leaveLocal();
+  const nb = $('#net-banner'); if (nb) nb.classList.remove('hidden');
+}
+
 (async function boot() {
   document.body.addEventListener('pointerdown', () => Snd.ensure(), { once: true });
   const urlRoom = new URLSearchParams(location.search).get('room');
   if (S.save && S.save.code && S.save.token) {
-    const r = await api('/api/lammaha/join', { code: S.save.code, token: S.save.token });
+    let r = await api('/api/lammaha/join', { code: S.save.code, token: S.save.token });
+    for (let i = 0; i < 3 && r.netErr; i++) { await new Promise(res => setTimeout(res, 700 * (i + 1))); r = await api('/api/lammaha/join', { code: S.save.code, token: S.save.token }); }
     if (r.ok) { openStream(); return; }
+    if (r.netErr) { openStream(); renderConnecting(); return; }
     LS.del('lammaha_save'); S.save = null;
-    if (r.gone) toast('الروم القديم خلص', 'err');
+    if (r.gone) toast('الروم القديم خلص', 'err'); else if (r.error) toast(r.error, 'err');
   }
   renderHome(urlRoom || '');
   if (!LS.get('lamma_help_off_lammaha', false)) setTimeout(showHelp, 350);

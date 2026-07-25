@@ -40,7 +40,7 @@ function toast(msg, kind) {
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 2600);
   setTimeout(() => t.remove(), 3000);
 }
-const AVATARS = ['🕵️','🔎','🧠','🎩','📎','🗂️','🧩','💡','📌','🔦','🗝️','⚖️','📖','🖇️','🧭','🪞','🎯','📝','🔬','🧵','♟️','🫖','🪄','📮'];
+const AVATARS = ['🕵️','🔎','🧠','🎩','📎','📁','🧩','💡','📌','🔦','🗝️','⚖️','📖','🔗','🧭','🪞','🎯','📝','🔬','🧵','♟️','🫖','🪄','📮'];
 
 const Snd = {
   ctx: null, muted: LS.get('conan_mute', false),
@@ -66,7 +66,7 @@ const S = {
 
 async function api(path, body) {
   try { const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); return await r.json(); }
-  catch (e) { return { ok: false, error: 'مفيش اتصال بالسيرفر 📡' }; }
+  catch (e) { return { ok: false, netErr: true, error: 'مفيش اتصال بالسيرفر 📡' }; }
 }
 async function act(action, extra) {
   if (!S.save) return { ok: false };
@@ -124,11 +124,12 @@ function header(sub) {
   <div id="presence-bar" class="presence-bar hidden"></div>`;
 }
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('#help-btn,#home-btn,#mute-btn,#leave-fab');
+  const t = e.target.closest('#help-btn,#home-btn,#mute-btn,#leave-fab,#force-play');
   if (!t) return;
   if (t.id === 'help-btn') { Snd.ensure(); showHelp(); }
   else if (t.id === 'home-btn') { if (S.save && !await uiConfirm('ترجع للمّة؟ مكانك في الروم محفوظ', { emoji: '🏠', okLabel: 'ارجع', cancelLabel: 'فضّل هنا' })) return; location.href = '/'; }
   else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
+  else if (t.id === 'force-play') { if (await uiConfirm('تكمّلوا من غير اللي متأخر؟ اللعبة هتمشي من غيره وسكوره بيفضل محسوب', { emoji: '⏭️', title: 'كمّلوا من غيره', okLabel: 'كمّل', cancelLabel: 'استنى' })) act('forceNext'); }
   else if (t.id === 'leave-fab') { if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', title: 'خروج', okLabel: 'اخرج', cancelLabel: 'استنى' })) return; await act('leave'); leaveLocal(); }
 });
 function updPresence(st) {
@@ -340,6 +341,8 @@ function startCountdown(deadline) {
   timerRAF = requestAnimationFrame(loop);
 }
 const LEAVE_BTN = '';
+/* زرار طوارئ للهوست — يكمّل اللعبة لو حد فصل/سايب موبايله وواقف اللعب */
+const hostForce = st => (st && st.you && st.you.isHost) ? '<div class="card tight"><button class="btn sm ghost" id="force-play" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button></div>' : '';
 const ACC_LINES = ['النهاردة انت المتّهم! 🎭', 'وقعت في الفخ — انت المتّهم 😅', 'الكرسي الساخن ليك 🔥', 'كلهم هيحققوا معاك دلوقتي 😬'];
 const DET_LINES = ['انت محقق 🔎 شمّر عن دراعك', 'دورك تحقق وتكتشف 🕵️', 'المحقق الذكي.. ابدأ اسأل 🧠', 'عينك على الكلمة يا محقق 👀'];
 function roleBanner(st) {
@@ -366,7 +369,7 @@ function buildPick(st) {
         <h2 class="display">${st.accused ? st.accused.avatar + ' ' + esc(st.accused.name) : ''} هو المتّهم!</h2>
         <div class="muted mt">بيجهّز الكلمة السرية دلوقتي... جهّزوا أسئلتكم 🔎</div></div>
       </div>
-      ${LEAVE_BTN}`;
+      ${LEAVE_BTN}${hostForce(st)}`;
     bindLeave2(); return;
   }
   const locked = st.pickMode;
@@ -387,7 +390,7 @@ function buildPick(st) {
       ` : ''}
       ${st.secret ? '<button class="btn primary big mt" id="start-play">🔎 يلا يسألوني</button>' : ''}
     </div>
-    ${LEAVE_BTN}`;
+    ${LEAVE_BTN}${hostForce(st)}`;
   const pb = $('#pick-bank'); if (pb) lockBtn(pb, () => act('pickBank'));
   let chosenCat = (st.catOptions && st.catOptions[0]) ? st.catOptions[0].id : null;
   $$('.cat-pick').forEach(el => el.onclick = () => { $$('.cat-pick').forEach(x => x.classList.remove('on')); el.classList.add('on'); chosenCat = el.dataset.cat; });
@@ -451,7 +454,7 @@ function buildPlay(st) {
                 ${st.mustSubmit ? '' : '<button class="btn ghost big mt" id="keep-btn">🔎 لأ، هكمّل تحقيق</button>'}
                 <div class="center muted small mt">قرروا <b id="d-n">${st.decidedCount}</b> من ${st.decideTotal}</div>
               </div>`))}
-      ${LEAVE_BTN}`;
+      ${LEAVE_BTN}${hostForce(st)}`;
     const sb = $('#sub-btn');
     if (sb) {
       const send = async () => { const v = $('#sub-in').value.trim(); if (!v) return toast('اكتب إجابتك', 'err'); const r = await act('submitAnswer', { text: v }); if (r.ok) Snd.play('ok'); };
@@ -494,7 +497,7 @@ function buildPlay(st) {
           : `<div class="center" style="font-weight:900">${st.asker ? st.asker.avatar + ' ' + esc(st.asker.name) : ''} بيكتب سؤاله...</div>`)}
     </div>
     ${st.youSubmitted ? `<div class="card tight center"><span class="muted small">🔒 انت سلّمت إجابتك — بتتفرج بس</span></div>` : ''}
-    ${LEAVE_BTN}`;
+    ${LEAVE_BTN}${hostForce(st)}`;
   startCountdown(st.deadline);
   const qb = $('#q-btn');
   if (qb) {
@@ -580,9 +583,9 @@ function buildGameover(st) {
   app.innerHTML = `${header('خلصت اللعبة! 🎉')}
     <div class="bunting teal"></div>
     <div class="card center"><h2 class="display" style="font-size:30px">🏆 نتيجة السهرة</h2><div class="podium">${pod(1)}${pod(0)}${pod(2)}</div></div>
-    <div class="card"><h3 class="mb">🎖️ الجوايز</h3>${R.awards.map(a => `<div class="award"><span class="aic">${a.icon}</span><div><div class="at">${esc(a.title)}: ${esc(a.who)}</div><div class="ad">${esc(a.detail)}</div></div></div>`).join('')}</div>
+    <div class="card"><h3 class="mb">🏅 الجوايز</h3>${R.awards.map(a => `<div class="award"><span class="aic">${a.icon}</span><div><div class="at">${esc(a.title)}: ${esc(a.who)}</div><div class="ad">${esc(a.detail)}</div></div></div>`).join('')}</div>
     <div class="card"><h3 class="mb">📊 الترتيب النهائي</h3>${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">🚪</span>' : ''}</span><span class="sc">${p.score}</span></div>`).join('')}</div>
-    <div class="card"><h3 class="mb">🗂️ ملف القضايا — اكشف كل حاجة</h3><div class="muted small mb">دوس على أي قضية تشوف كلمتها، وكل التخمينات، ومين عرفها 👇</div>${(R.review || []).map(caseCard).join('')}</div>
+    <div class="card"><h3 class="mb">📁 ملف القضايا — اكشف كل حاجة</h3><div class="muted small mb">دوس على أي قضية تشوف كلمتها، وكل التخمينات، ومين عرفها 👇</div>${(R.review || []).map(caseCard).join('')}</div>
     ${me.isHost ? '<button class="btn primary big" id="again-btn">🔄 نلعب تاني (متّهم جديد)</button>' : `<div class="card tight center">جولة تانية؟ <b>${esc(hostP.name || '')}</b> 👑</div>`}
     <button class="btn ghost big mt" id="leave-btn">🏠 خروج</button>`;
   const ab = $('#again-btn'); if (ab) lockBtn(ab, () => act('playAgain'));
@@ -595,7 +598,7 @@ const PATCH = { lobby: () => {}, pick: patchPick, play: patchPlay, caseEnd: patc
 /* ===== التعليمات ===== */
 const CONAN_STEPS = [
   ['🎯', 'اللعبة إيه؟', 'لاعب واحد (<span class="hl">المتّهم</span>) معاه كلمة سرية، وباقي اللاعيبة (<span class="hl">المحققين</span>) بيحاولوا يعرفوها بأسئلة إجابتها <b>أه / لا / مش قادر أحدد</b>. <span class="hl">اللي يعرف الكلمة بدري ياخد نقط أكتر</span>.'],
-  ['🗂️', 'قضية.. جولة.. دور', 'فوق فيه 3 عدّادات: <span class="hl">القضية</span> = مين المتّهم دلوقتي، <span class="hl">الجولة</span> = رقم لفّة الأسئلة، <span class="hl">الدور</span> = محقق مين بيسأل. وكل لاعب بيبقى متّهم في قضية، بالعدل — الهوست بيحدد كام مرة.'],
+  ['📁', 'قضية.. جولة.. دور', 'فوق فيه 3 عدّادات: <span class="hl">القضية</span> = مين المتّهم دلوقتي، <span class="hl">الجولة</span> = رقم لفّة الأسئلة، <span class="hl">الدور</span> = محقق مين بيسأل. وكل لاعب بيبقى متّهم في قضية، بالعدل — الهوست بيحدد كام مرة.'],
   ['🎭', 'المتّهم بياخد كلمته', 'كلمة من البنك، أو يكتبها بنفسه لو الهوست سامح. الكلمة قدامه طول الوقت و<span class="warn">لازم يرد عليها بصدق</span> في كل سؤال.'],
   ['🔎', 'الأسئلة بالدور', 'كل جولة = <span class="hl">سؤال واحد من كل محقق</span> بالترتيب. السؤال والرد بيظهروا للكل شوية عشان الكل يقراهم. <span class="warn">وممنوع تكرار سؤال اتسأل قبل كده</span>.'],
   ['🧠', 'ركّز واحفظ', '<span class="warn">مفيش سجل ترجعله</span> — كل سؤال وجوابه بيعدّي بعد ما يظهر. اللي بيربط الأجوبة ببعض بيوصل للكلمة أسرع.'],
@@ -617,14 +620,44 @@ function showHelp() {
   $('#help-ok').onclick = close; ov.onclick = e => { if (e.target === ov) close(); };
 }
 
+/* شاشة إعادة الاتصال — بتظهر لو النت وقع وإحنا بنحاول نرجّع اللاعب لنفس مكانه من غير ما نفقد السيشن */
+function renderConnecting() {
+  S.sig = 'reconnecting'; S.viewKey = 'reconnecting';
+  if (typeof stopTimers === 'function') stopTimers();
+  if (typeof stopTimer === 'function') stopTimer();
+  app.innerHTML = `
+    ${header('بنرجّعك للروم...')}
+    <div class="card center">
+      <div style="font-size:46px;margin:8px 0">📡</div>
+      <div style="font-size:20px;font-weight:800">بنحاول نرجّعك للّعبة...</div>
+      <div class="muted small mt" style="line-height:1.9">مكانك في الروم محفوظ — أول ما النت يرجع هتكمّل من نفس المكان أوتوماتيك.</div>
+      <button class="btn teal big mt" id="reco-retry">🔄 جرّب دلوقتي</button>
+      <button class="btn ghost mt" id="reco-home">ارجع للمّة</button>
+    </div>`;
+  const rb = $('#reco-retry'); if (rb) rb.onclick = async () => {
+    if (!S.save) return renderHome('');
+    const r = await api('/api/conan/join', { code: S.save.code, token: S.save.token });
+    if (r.ok) { openStream(); return; }
+    if (r.netErr) { toast('لسه مفيش اتصال 📡', 'err'); return; }
+    LS.del('conan_save'); S.save = null; toast(r.gone ? 'الروم القديم خلص' : (r.error || 'مش قادر ترجع'), 'err'); renderHome('');
+  };
+  const hb = $('#reco-home'); if (hb) hb.onclick = () => leaveLocal();
+  const nb = $('#net-banner'); if (nb) nb.classList.remove('hidden');
+}
+
 (async function boot() {
   document.body.addEventListener('pointerdown', () => Snd.ensure(), { once: true });
   const urlRoom = new URLSearchParams(location.search).get('room');
   if (S.save && S.save.code && S.save.token) {
-    const r = await api('/api/conan/join', { code: S.save.code, token: S.save.token });
+    let r = await api('/api/conan/join', { code: S.save.code, token: S.save.token });
+    // النت لسه بيرجع بعد فتح الشاشة؟ جرّب كام مرة قبل ما تستسلم
+    for (let i = 0; i < 3 && r.netErr; i++) { await new Promise(res => setTimeout(res, 700 * (i + 1))); r = await api('/api/conan/join', { code: S.save.code, token: S.save.token }); }
     if (r.ok) { openStream(); return; }
+    // مشكلة اتصال مؤقتة: نحتفظ بالسيشن ونفضل نحاول — الـ EventSource بيعيد المحاولة لوحده لحد ما النت يرجع
+    if (r.netErr) { openStream(); renderConnecting(); return; }
+    // رفض نهائي (الروم خلص فعلًا أو اللاعب اتشال): نمسح السيشن
     LS.del('conan_save'); S.save = null;
-    if (r.gone) toast('الروم القديم خلص', 'err');
+    if (r.gone) toast('الروم القديم خلص', 'err'); else if (r.error) toast(r.error, 'err');
   }
   renderHome(urlRoom || '');
   if (!LS.get('lamma_help_off_conan', false)) setTimeout(showHelp, 350);
