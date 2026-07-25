@@ -7,6 +7,15 @@
 const crypto = require('crypto');
 const BANK = require('./bank');
 
+/* علّم الكلمة وكل الصيغ التانية منها كمستعملة — عشان نفس الكيان
+   («نيمار» / «نيمار جونيور») ما يجيش مرتين في نفس الروم */
+function markUsed(room, item) {
+  if (!item) return;
+  room.usedItems = room.usedItems || new Set();
+  for (const id of BANK.relatedIds(item)) room.usedItems.add(id);
+}
+
+
 const HOST_GRACE_MS = parseInt(process.env.HOST_GRACE_MS || '45000', 10);
 const ROOM_TTL_MS = parseInt(process.env.ROOM_TTL_MS || String(90 * 60 * 1000), 10);
 const MAX_ROOMS = 300;
@@ -193,7 +202,7 @@ function startRound(room) {
     room.sub = 'pick';
   } else {
     room.item = pickItem(room);
-    if (room.item) room.usedItems.add(room.item.id);
+    if (room.item) markUsed(room, room.item);
     room.pickMode = 'bank';
     room.sub = 'hint';
   }
@@ -454,7 +463,7 @@ module.exports = {
       if (room.pickMode === 'custom') return R(400, { ok: false, error: 'انت اخترت تكتب كلمتك — كمّل بيها' });
       const it = pickItem(room);
       if (!it) return R(400, { ok: false, error: 'البنك خلص في المستوى ده' });
-      room.item = it; room.usedItems.add(it.id);
+      room.item = it; markUsed(room, it);
       room.pickMode = 'bank';
       room.sub = 'hint';
       broadcast(room);
@@ -514,7 +523,7 @@ module.exports = {
       if (room.passesUsed >= room.settings.maxPass) return R(400, { ok: false, error: 'خلّصت مرات العدّي' });
       room.passesUsed++;
       const next = pickItem(room);
-      if (next) { room.item = next; room.usedItems.add(next.id); }
+      if (next) { room.item = next; markUsed(room, next); }
       broadcast(room);
       return R(200, { ok: true });
     }
@@ -528,7 +537,7 @@ module.exports = {
     if (A === 'forceNext') {
       if (!isHost(room, p)) return R(403, { ok: false, error: 'الهوست بس' });
       if (room.phase === 'reveal') advanceRound(room);
-      else if (room.phase === 'clue') { if (room.sub === 'guess') resolveHint(room); else { if (!room.item) { const it = pickItem(room); if (it) { room.item = it; room.usedItems.add(it.id); } } endRound(room, [], null); } }
+      else if (room.phase === 'clue') { if (room.sub === 'guess') resolveHint(room); else { if (!room.item) { const it = pickItem(room); if (it) { room.item = it; markUsed(room, it); } } endRound(room, [], null); } }
       return R(200, { ok: true });
     }
     if (A === 'presence') {

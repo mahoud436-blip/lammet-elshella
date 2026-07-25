@@ -7,6 +7,15 @@
 const crypto = require('crypto');
 const BANK = require('./bank');
 
+/* علّم الكلمة وكل الصيغ التانية منها كمستعملة — عشان نفس الكيان
+   («نيمار» / «نيمار جونيور») ما يجيش مرتين في نفس الروم */
+function markUsed(room, item) {
+  if (!item) return;
+  room.usedItems = room.usedItems || new Set();
+  for (const id of BANK.relatedIds(item)) room.usedItems.add(id);
+}
+
+
 const HOST_GRACE_MS = parseInt(process.env.HOST_GRACE_MS || '45000', 10);
 const ROOM_TTL_MS = parseInt(process.env.ROOM_TTL_MS || String(90 * 60 * 1000), 10);
 const MAX_ROOMS = 300;
@@ -35,7 +44,7 @@ function createRoom() {
     code, createdAt: now(), lastActivity: now(),
     phase: 'lobby',   // lobby | pick | play | caseEnd | gameover
     sub: 'ask',       // ask | answer | decide
-    settings: { cats: ['living', 'food', 'things', 'places'], rounds: 6, casesPerPlayer: 1, askOrder: 'turns', accusedOrder: 'turns',
+    settings: { cats: ['living', 'food', 'things', 'places'], level: 'easy', rounds: 6, casesPerPlayer: 1, askOrder: 'turns', accusedOrder: 'turns',
                 allowCustomWord: false, qTime: 0, aTime: 0 },
     hostToken: null, players: new Map(), order: [], ghosts: new Map(),
     usedItems: new Set(), plan: [], caseIdx: 0,
@@ -80,11 +89,14 @@ function activeDetectives(room) {
   return connectedPlayers(room).filter(p => p.token !== room.accused && !room.submissions.has(p.token));
 }
 
-function freeItems(room, catId) { return BANK.catItems(catId).filter(it => !room.usedItems.has(it.id)); }
+function freeItems(room, catId) { return BANK.catItemsByLevel(catId, room.settings.level).filter(it => !room.usedItems.has(it.id)); }
+/* لو المستوى خلص كلماته، ارجع لكل الكلمات في نفس الكاتيجوري قبل ما تفتح باقي الكاتيجوريز */
+function freeItemsAnyLevel(room, catId) { return BANK.catItems(catId).filter(it => !room.usedItems.has(it.id)); }
 function pickItem(room) {
   const pool = [];
   for (const c of room.settings.cats) for (const it of freeItems(room, c)) pool.push(it);
-  if (!pool.length) for (const c of BANK.cats()) for (const it of freeItems(room, c.id)) pool.push(it);
+  if (!pool.length) for (const c of room.settings.cats) for (const it of freeItemsAnyLevel(room, c)) pool.push(it);
+  if (!pool.length) for (const c of BANK.cats()) for (const it of freeItemsAnyLevel(room, c.id)) pool.push(it);
   if (!pool.length) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -96,6 +108,7 @@ function viewFor(room, p) {
     t: 'state', serverNow: now(), code: room.code, phase: room.phase,
     settings: room.settings, net: NET,
     allCats: BANK.cats(),
+    levels: BANK.LEVELS,
     round: room.round, totalRounds: room.settings.rounds,
     caseNo: room.caseIdx + 1, totalCases: room.plan.length || 0,
     players: allPlayers(room).map(x => ({ id: x.id, name: x.name, avatar: x.avatar, isHost: isHost(room, x),
@@ -232,7 +245,7 @@ function startCase(room) {
   room.penalty = 0; room.curQ = null; room.item = null; room.pickMode = null;
   if (!room.settings.allowCustomWord) {
     const it = pickItem(room);
-    if (it) { room.item = it; room.usedItems.add(it.id); }
+    if (it) { room.item = it; markUsed(room, it); }
     room.pickMode = 'bank';
   }
   room.phase = 'pick';
@@ -534,6 +547,7 @@ module.exports = {
       if (room.phase !== 'lobby') return R(400, { ok: false, error: 'الإعدادات في اللوبي بس' });
       const s = b.settings || {};
       if (Array.isArray(s.cats)) { const v = [...new Set(s.cats.filter(c => BANK.catMeta(c)))]; if (v.length >= 1) room.settings.cats = v; }
+      if (typeof s.level === 'string' && BANK.isLevel(s.level)) room.settings.level = s.level;
       const rr = parseInt(s.rounds, 10); if (Number.isInteger(rr) && rr >= 2 && rr <= 10) room.settings.rounds = rr;
       const cp = parseInt(s.casesPerPlayer, 10); if (Number.isInteger(cp) && cp >= 1 && cp <= 5) room.settings.casesPerPlayer = cp;
       if (s.askOrder === 'random' || s.askOrder === 'turns') room.settings.askOrder = s.askOrder;
@@ -558,7 +572,7 @@ module.exports = {
       if (room.pickMode === 'custom') return R(400, { ok: false, error: 'انت اخترت تكتب كلمتك — كمّل بيها' });
       const it = pickItem(room);
       if (!it) return R(400, { ok: false, error: 'البنك خلص' });
-      room.item = it; room.usedItems.add(it.id);
+      room.item = it; markUsed(room, it);
       room.pickMode = 'bank';
       broadcast(room);
       return R(200, { ok: true });
@@ -645,7 +659,7 @@ module.exports = {
     if (A === 'forceNext') {
       if (!isHost(room, p)) return R(403, { ok: false, error: 'الهوست بس' });
       if (room.paused) { const k = room.paused.kind; clearPause(room); if (k === 'asker' && room.phase === 'play' && room.sub === 'ask') skipAsk(room); else finishCase(room); return R(200, { ok: true }); }
-      if (room.phase === 'pick') { if (!room.item) { const it = pickItem(room); if (it) { room.item = it; room.usedItems.add(it.id); room.pickMode = 'bank'; } } beginPlay(room); }
+      if (room.phase === 'pick') { if (!room.item) { const it = pickItem(room); if (it) { room.item = it; markUsed(room, it); room.pickMode = 'bank'; } } beginPlay(room); }
       else if (room.phase === 'play' && room.sub === 'ask') skipAsk(room);
       else if (room.phase === 'play' && room.sub === 'answer') timeoutAnswer(room);
       else if (room.phase === 'play' && room.sub === 'decide') { for (const d of connectedPlayers(room)) if (d.token !== room.accused && !room.submissions.has(d.token)) room.decided.add(d.token); maybeCloseDecide(room); }

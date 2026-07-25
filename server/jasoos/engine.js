@@ -7,6 +7,15 @@
 const crypto = require('crypto');
 const BANK = require('./bank');
 
+/* علّم الكلمة وكل الصيغ التانية منها كمستعملة — عشان نفس الكيان
+   («نيمار» / «نيمار جونيور») ما يجيش مرتين في نفس الروم */
+function markUsed(room, item) {
+  if (!item) return;
+  room.usedItems = room.usedItems || new Set();
+  for (const id of BANK.relatedIds(item)) room.usedItems.add(id);
+}
+
+
 const HOST_GRACE_MS = parseInt(process.env.HOST_GRACE_MS || '45000', 10);
 const ROOM_TTL_MS = parseInt(process.env.ROOM_TTL_MS || String(90 * 60 * 1000), 10);
 const MAX_ROOMS = 300;
@@ -35,7 +44,7 @@ function createRoom() {
   const room = {
     code, createdAt: now(), lastActivity: now(),
     phase: 'lobby',   // lobby | play | vote | spyGuess | reveal | gameover
-    settings: { cats: ['sports', 'geo', 'food', 'animals'], rounds: 3, gameRounds: 3, spyMode: 'random', spyCount: 1, turnTime: 20 },
+    settings: { cats: ['sports', 'geo', 'food', 'animals'], level: 'easy', rounds: 3, gameRounds: 3, spyMode: 'random', spyCount: 1, turnTime: 20 },
     hostToken: null, players: new Map(), order: [], ghosts: new Map(),
     usedItems: new Set(),
     item: null, spies: new Set(), spyCountActual: 0,
@@ -71,11 +80,14 @@ function nameOf(room, token) {
   return { name: 'لاعب سابق', avatar: '👻', id: 'ghost' };
 }
 
-function freeItems(room, catId) { return BANK.catItems(catId).filter(it => !room.usedItems.has(it.id)); }
+function freeItems(room, catId) { return BANK.catItemsByLevel(catId, room.settings.level).filter(it => !room.usedItems.has(it.id)); }
+/* لو المستوى خلص كلماته، ارجع لكل الكلمات في نفس الكاتيجوري قبل ما تفتح باقي الكاتيجوريز */
+function freeItemsAnyLevel(room, catId) { return BANK.catItems(catId).filter(it => !room.usedItems.has(it.id)); }
 function pickItem(room) {
   const pool = [];
   for (const c of room.settings.cats) for (const it of freeItems(room, c)) pool.push(it);
-  if (!pool.length) for (const c of BANK.cats()) for (const it of freeItems(room, c.id)) pool.push(it);
+  if (!pool.length) for (const c of room.settings.cats) for (const it of freeItemsAnyLevel(room, c)) pool.push(it);
+  if (!pool.length) for (const c of BANK.cats()) for (const it of freeItemsAnyLevel(room, c.id)) pool.push(it);
   if (!pool.length) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -97,6 +109,7 @@ function viewFor(room, p) {
     t: 'state', serverNow: now(), code: room.code, phase: room.phase,
     settings: room.settings, net: NET,
     allCats: BANK.cats(),
+    levels: BANK.LEVELS,
     maxSpies: maxSpiesFor(connectedPlayers(room).length || room.players.size),
     gameRound: room.gameRound, totalGameRounds: room.settings.gameRounds,
     round: room.round, totalRounds: room.settings.rounds,
@@ -176,7 +189,7 @@ function startMiniGame(room) {
   room.readyNext = new Set();
   room.guessOpen = false;
   room.item = pickItem(room);
-  if (room.item) room.usedItems.add(room.item.id);
+  if (room.item) markUsed(room, room.item);
   chooseSpies(room);
   startRound(room);
 }
@@ -494,6 +507,7 @@ module.exports = {
       if (room.phase !== 'lobby') return R(400, { ok: false, error: 'الإعدادات في اللوبي بس' });
       const s = b.settings || {};
       if (Array.isArray(s.cats)) { const v = [...new Set(s.cats.filter(c => BANK.catMeta(c)))]; if (v.length >= 1) room.settings.cats = v; }
+      if (typeof s.level === 'string' && BANK.isLevel(s.level)) room.settings.level = s.level;
       const rr = parseInt(s.rounds, 10); if (Number.isInteger(rr) && rr >= 2 && rr <= 6) room.settings.rounds = rr;
       const gr = parseInt(s.gameRounds, 10); if (Number.isInteger(gr) && gr >= 1 && gr <= 10) room.settings.gameRounds = gr;
       if (s.spyMode === 'random' || s.spyMode === 'fixed') room.settings.spyMode = s.spyMode;
