@@ -15,7 +15,7 @@ const MAX_PLAYERS = 12;
 const MAX_Q_CHARS = 90;
 const NO_ANSWER_PENALTY = 10;
 const ANSWER_HOLD_MS = parseInt(process.env.ANSWER_HOLD_MS || '4000', 10);   // وقت عرض رد المتّهم قبل السؤال اللي بعده
-const AVATARS = ['🕵️','🔎','🧠','🎩','📎','🗂️','🧩','💡','📌','🔦','🗝️','⚖️','📖','🖇️','🧭','🪞','🎯','📝','🔬','🧵','♟️','🫖','🪄','📮'];
+const AVATARS = ['🕵️','🔎','🧠','🎩','📎','📁','🧩','💡','📌','🔦','🗝️','⚖️','📖','🔗','🧭','🪞','🎯','📝','🔬','🧵','♟️','🫖','🪄','📮'];
 
 let NET = { ips: [], port: 3000, hosted: false };
 const now = () => Date.now();
@@ -138,8 +138,11 @@ function viewFor(room, p) {
     }
     if (room.sub === 'decide') {
       st.youDecided = room.decided.has(p.token) || room.submissions.has(p.token);
-      st.decidedCount = [...room.decided].filter(t => room.players.has(t)).length + [...room.submissions.keys()].filter(t => room.players.has(t)).length;
-      st.decideTotal = connectedPlayers(room).filter(x => x.token !== room.accused).length;
+      // العدّاد لازم يطابق شرط الإقفال بالظبط: المحققين المتوصلين لقرار (سلّم أو قرر يكمّل).
+      // ملحوظة: اللي بيسلّم بيتحط في submissions و decided مع بعض، فلازم اتحاد مش جمع عشان ميتعدّش مرتين.
+      const dets = connectedPlayers(room).filter(x => x.token !== room.accused);
+      st.decidedCount = dets.filter(x => room.submissions.has(x.token) || room.decided.has(x.token)).length;
+      st.decideTotal = dets.length;
       st.mustSubmit = room.round >= room.settings.rounds;   // آخر جولة: لازم يسلّم
     }
   }

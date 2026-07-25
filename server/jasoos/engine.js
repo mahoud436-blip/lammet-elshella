@@ -131,7 +131,7 @@ function viewFor(room, p) {
     st.picksNeeded = room.spyCountActual;
     st.youVoted = room.votes.has(p.token);
     st.yourVotes = room.votes.get(p.token) || [];
-    st.votedCount = [...room.votes.keys()].filter(t => room.players.has(t)).length;
+    st.votedCount = connectedPlayers(room).filter(x => !room.spies.has(x.token) && room.votes.has(x.token)).length;
     st.voteTotal = connectedPlayers(room).filter(x => !room.spies.has(x.token)).length;
     st.candidates = activePlayers(room).filter(x => x.token !== p.token).map(x => ({ id: x.id, name: x.name, avatar: x.avatar }));
   }
@@ -142,7 +142,7 @@ function viewFor(room, p) {
     // الجاسوس اللي لسه ما خمّنش مينفعش يشوف الكلمة قبل ما يبعت تخمينه
     const hideSecret = st.guessOpen && st.youAreSpy && !st.youGuessed;
     st.result = (hideSecret && room.lastResult) ? Object.assign({}, room.lastResult, { secret: null }) : room.lastResult;
-    st.spyGuessCount = room.spyGuesses.size;
+    st.spyGuessCount = [...room.spies].filter(t => { const q = room.players.get(t); return q && q.connected && room.spyGuesses.has(t); }).length;
     st.spyTotal = [...room.spies].filter(t => { const q = room.players.get(t); return q && q.connected; }).length;
     st.readyIds = [...room.readyNext].map(t => (room.players.get(t) || {}).id).filter(Boolean);
     st.youReady = room.readyNext.has(p.token);

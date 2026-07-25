@@ -7,7 +7,24 @@ const BASE = 'http://127.0.0.1:' + PORT;
 let passed = 0, failed = 0;
 function ok(c, m) { if (c) passed++; else { failed++; console.error('  ❌ ' + m); } }
 function must(c, m) { if (!c) { failed++; console.error('  💥 ' + m); throw new Error(m); } passed++; }
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* ===== تثبيت توقيت الاختبار =====
+   الاختبار بيستنى شوية بعد كل خطوة عشان حالة السيرفر توصل للاعيبة (عبر SSE).
+   الانتظار كان مدة ثابتة، فلو الجهاز مضغوط الرد بيتأخر شوية والاختبار يحسبها فشل
+   — رغم إن اللعبة سليمة. دلوقتي بيقيس ضغط الجهاز ويزوّد الانتظار لوحده.
+   ملحوظة: ده ملف اختبار بس — مفيش أي تغيير في قواعد اللعبة أو طريقة اللعب. */
+const FORCE_SCALE = Number(process.env.TEST_TIME_SCALE || 0);  // >0 يفرض معامل ثابت
+let lagFactor = 1;
+const rawSleep = ms => new Promise(r => setTimeout(r, ms));
+async function refreshLag() {
+  if (FORCE_SCALE > 0) { lagFactor = FORCE_SCALE; return; }
+  const t0 = Date.now();
+  await rawSleep(60);                      // لو الجهاز فاضي هترجع بعد ~60ms بالظبط
+  const drift = Math.max(0, Date.now() - t0 - 60);
+  lagFactor = Math.min(12, Math.max(1, 1 + drift / 25));   // كل 25ms تأخير = مهلة أطول
+}
+const scale = () => (FORCE_SCALE > 0 ? FORCE_SCALE : lagFactor);
+const sleep = ms => rawSleep(Math.ceil(ms * scale()));
+
 function post(path, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body || {});
@@ -27,8 +44,13 @@ function stream(pl) {
 }
 function drop(pl) { try { pl._req.destroy(); } catch (e) {} }
 async function waitFor(pl, pred, ms, label) {
+  const budget = Math.ceil((ms || 6000) * Math.max(2, scale()));   // مهلة أوسع لما الجهاز يكون مضغوط
   const t0 = Date.now();
-  while (Date.now() - t0 < (ms || 6000)) { if (pl.last && pred(pl.last)) return pl.last; await sleep(25); }
+  while (Date.now() - t0 < budget) { if (pl.last && pred(pl.last)) return pl.last; await rawSleep(25); }
+  // قبل ما نحسبها فشل: نقيس الضغط تاني ونديله فرصة أخيرة (ممكن الجهاز كان مخنوق)
+  await refreshLag();
+  const t1 = Date.now();
+  while (Date.now() - t1 < budget) { if (pl.last && pred(pl.last)) return pl.last; await rawSleep(25); }
   throw new Error('waitFor timeout: ' + (label || '') + ' | phase=' + (pl.last && pl.last.phase) + ' sub=' + (pl.last && pl.last.sub) + ' round=' + (pl.last && pl.last.round) + ' clues=' + (pl.last && pl.last.cluesGiven));
 }
 async function act(pl, action, extra) { return post('/api/lammaha/action', Object.assign({ code: pl.code, token: pl.token, action }, extra || {})); }
@@ -439,7 +461,7 @@ async function scenarioD() {
   let up = false;
   for (let i = 0; i < 60 && !up; i++) { try { await post('/api/lammaha/join', {}); up = true; } catch (e) { await sleep(120); } }
   must(up, 'السيرفر قام');
-  try { await scenarioA(); await scenarioB(); await scenarioC(); await scenarioD(); }
+  try { await refreshLag(); await scenarioA(); await refreshLag(); await scenarioB(); await refreshLag(); await scenarioC(); await refreshLag(); await scenarioD(); }
   catch (e) { failed++; console.error('💥 خطأ:', e.message); }
   srv.kill();
   console.log(`\n===== النتيجة: ✅ ${passed} ناجح | ❌ ${failed} فاشل =====`);

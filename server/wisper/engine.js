@@ -101,13 +101,13 @@ function viewFor(room, p) {
     st.deadline = room.voteDeadline;
     st.yourVote = room.votes.has(p.token) ? room.votes.get(p.token) : null;
     st.votedIds = [...room.votes.keys()].map(t => (room.players.get(t) || {}).id).filter(Boolean);
-    st.votedCount = [...room.votes.keys()].filter(t => room.players.has(t)).length;
+    st.votedCount = connectedPlayers(room).filter(x => room.votes.has(x.token)).length;
   }
   if (room.phase === 'write') {
     st.yourAnswer = room.writeSet.has(p.token) ? room.writeSet.get(p.token) : null;
     st.youSubmitted = room.writeSet.has(p.token);
     // الغموض: مفيش أسماء مين سلّم — عدد بس عشان محدش يستنتج
-    st.submittedCount = [...room.writeSet.keys()].filter(t => room.players.has(t)).length;
+    st.submittedCount = connectedPlayers(room).filter(x => room.writeSet.has(x.token)).length;
     st.writeTotal = connectedPlayers(room).length;
   }
   if (room.phase === 'guess') {
