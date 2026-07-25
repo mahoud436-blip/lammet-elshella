@@ -253,6 +253,12 @@ function buildLobby(st) {
       <div class="count-note">مختار <b id="cat-count">${s.cats.length}</b></div>
       <div class="cats-grid mt" id="cats-grid"></div>
 
+      <div class="mt center muted small">مستوى الكلمات 📊</div>
+      <div class="row wrap" style="justify-content:center">
+        ${(st.levels || []).map(l => `<span class="chip click ${s.level === l.id ? 'on' : ''} ${isHost ? '' : 'locked'}" data-level="${l.id}">${l.icon} ${l.name}</span>`).join('')}
+      </div>
+      <div class="center muted small" style="margin-top:4px;font-size:12px">كل كاتيجوري فيها 100 كلمة لكل مستوى</div>
+
       <div class="mt center muted small">عدد أسئلة كل محقق في القضية (= عدد الجولات)</div>
       <div class="stepper">
         <button class="btn" data-min="rounds" ${isHost ? '' : 'disabled'}>−</button>
@@ -304,6 +310,7 @@ function buildLobby(st) {
   try { const q = window.qrcode(0, 'M'); q.addData(url); q.make(); let svg = ''; try { svg = q.createSvgTag({ cellSize: 4, margin: 2 }); } catch (e) { svg = q.createSvgTag(4, 2); } $('#qr').innerHTML = svg; } catch (e) { $('#qr').classList.add('hidden'); }
   const copy = txt => { (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('اتنسخ ✅', 'ok')).catch(() => {}); };
   $('#code-copy').onclick = () => copy(st.code); $('#url-copy').onclick = () => copy(url);
+  $$('[data-level]').forEach(el => el.onclick = () => act('setSettings', { settings: { level: el.dataset.level } }));
   const grid = $('#cats-grid');
   grid.innerHTML = st.allCats.map(c => `<div class="cat-chip ${s.cats.includes(c.id) ? 'on' : ''} ${isHost ? '' : 'locked'}" data-cat="${c.id}"><span class="ic">${c.icon}</span><span>${esc(c.name)}</span></div>`).join('');
   if (isHost) {
