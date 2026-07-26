@@ -52,7 +52,7 @@ function createRoom() {
   const room = {
     code, createdAt: now(), lastActivity: now(),
     phase: 'lobby', // lobby | clue | reveal | gameover
-    settings: { cats: ['football', 'places', 'animals', 'food'], level: 'easy', roundsPerPlayer: 2, maxClues: 4, maxPass: 1, clueTime: 0, order: 'random', allowCustomWord: false, maxWords: 3 },
+    settings: { cats: ['football', 'places', 'animals', 'food'], level: 'easy', roundsPerPlayer: 2, maxClues: 4, maxPass: 1, clueTime: 0, order: 'random', allowCustomWord: false, maxWords: 1 },
     hostToken: null, players: new Map(), order: [], ghosts: new Map(),
     usedItems: new Set(),          // الأسماء اللي اتلعبت في الروم — عمرها ما بتتصفر
     plan: [], roundIdx: 0,
@@ -150,6 +150,7 @@ function viewFor(room, p) {
   }
   if (room.phase === 'reveal') {
     st.result = publicResult(room.lastResult);
+    st.creditCount = ((room.lastResult || {}).credited || []).length;
     st.youAreCluer = room.cluer === p.token;
     /* الملمّح بس هو اللي بيشوف قايمة التصحيح — من غير التوكنات */
     st.canCredit = st.youAreCluer && !!(room.lastResult.candidates || []).length;
@@ -329,7 +330,7 @@ function finishGame(room) {
   if (ranking.length) awards.push({ icon: '🏆', title: 'بطل اللمّة', who: ranking[0].name, detail: ranking[0].score + ' نقطة' });
   let bestCluer = null;
   for (const p of players) if (!bestCluer || p.stat.cluedSuccess > bestCluer.stat.cluedSuccess) bestCluer = p;
-  if (bestCluer && bestCluer.stat.cluedSuccess > 0) awards.push({ icon: '🎤', title: 'أحسن ملمّح', who: bestCluer.name, detail: `وصّل ${bestCluer.stat.cluedSuccess} مرة` });
+  if (bestCluer && bestCluer.stat.cluedSuccess > 0) awards.push({ icon: '💡', title: 'أحسن ملمّح', who: bestCluer.name, detail: `وصّل ${bestCluer.stat.cluedSuccess} مرة` });
   let bestGuesser = null;
   for (const p of players) if (!bestGuesser || p.stat.solved > bestGuesser.stat.solved) bestGuesser = p;
   if (bestGuesser && bestGuesser.stat.solved > 0) awards.push({ icon: '🧠', title: 'الفكّيك', who: bestGuesser.name, detail: `خمّن صح ${bestGuesser.stat.solved} مرة` });
@@ -555,7 +556,7 @@ module.exports = {
       if (room.phase !== 'reveal') return R(400, { ok: false, error: 'مش وقتها' });
       if (room.cluer !== p.token) return R(403, { ok: false, error: 'الملمّح بس هو اللي يحسبها' });
       const res = room.lastResult || {};
-      const cand = (res.candidates || []).find(c => c.id === String(body.target || ''));
+      const cand = (res.candidates || []).find(c => c.id === String(b.target || ''));
       if (!cand) return R(400, { ok: false, error: 'اللاعب ده مش في القايمة' });
       res.credited = res.credited || [];
       if (res.credited.includes(cand.token)) return R(400, { ok: false, error: 'محسوبة له خلاص' });

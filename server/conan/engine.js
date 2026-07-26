@@ -45,7 +45,7 @@ function createRoom() {
     code, createdAt: now(), lastActivity: now(),
     phase: 'lobby',   // lobby | pick | play | caseEnd | gameover
     sub: 'ask',       // ask | answer | decide
-    settings: { cats: ['living', 'food', 'things', 'places'], level: 'easy', rounds: 6, casesPerPlayer: 1, askOrder: 'turns', accusedOrder: 'turns',
+    settings: { cats: ['living', 'food', 'things', 'places'], level: 'easy', rounds: 6, casesPerPlayer: 1, askOrder: 'random', accusedOrder: 'random',
                 allowCustomWord: false, qTime: 0, aTime: 0 },
     hostToken: null, players: new Map(), order: [], ghosts: new Map(),
     usedItems: new Set(), plan: [], caseIdx: 0,
@@ -163,6 +163,7 @@ function viewFor(room, p) {
   }
   if (room.phase === 'caseEnd') {
     st.result = publicResult(room.lastResult);
+    st.creditCount = ((room.lastResult || {}).credited || []).length;
     /* المتّهم بس هو اللي بيشوف قايمة التصحيح */
     const mine = room.accused === p.token;
     st.canCredit = mine && !!(room.lastResult.candidates || []).length;

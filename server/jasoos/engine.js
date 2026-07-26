@@ -155,6 +155,7 @@ function viewFor(room, p) {
     // الجاسوس اللي لسه ما خمّنش مينفعش يشوف الكلمة قبل ما يبعت تخمينه
     const hideSecret = st.guessOpen && st.youAreSpy && !st.youGuessed;
     st.result = publicResult(hideSecret && room.lastResult ? Object.assign({}, room.lastResult, { secret: null }) : room.lastResult);
+    st.creditCount = ((room.lastResult || {}).credited || []).length;
     /* الهوست بس — وبعد ما تخمينات الجواسيس تتعرض */
     const R2 = room.lastResult;
     const canSee = isHost(room, p) && R2 && R2.guessDone && !hideSecret;
