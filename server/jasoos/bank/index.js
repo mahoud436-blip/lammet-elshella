@@ -131,6 +131,8 @@ function distinctive(cat, token) { return (tokenFreq.get(cat + '|' + token) || 0
 /* كل عناوين البنك — بنستخدمها عشان كلمة موجودة كمدخل مستقل
    ما تتقبلش كإجابة لمدخل تاني مركّب منها */
 const titleSet = new Set(all.map(x => normalize(x.title)));
+/* مين من البنك ومين كلمة كتبها المتّهم بنفسه */
+const bankIds = new Set(all.map(x => x.id));
 
 /* فهرس المقاطع المتّصلة (كلمتين أو أكتر) اللي جوه الأسماء الطويلة —
    عشان «لوحة المفاتيح» تتقبل لـ«لوحة المفاتيح الرقمية».
@@ -153,7 +155,10 @@ for (const it of all) {
     }
   }
 }
-function phraseUnique(cat, frag) { return (phraseFreq.get(cat + '|' + frag) || 0) === 1; }
+/* المقطع ده بيوصّل لمدخل واحد بس؟
+   0 = مش موجود في أي كلمة بنك (زي الكلمة اللي المتّهم كتبها بنفسه — مفيش لبس)
+   1 = مدخل واحد بس  •  2+ = ملخبط، مبيتقبلش */
+function phraseOk(cat, frag) { return (phraseFreq.get(cat + '|' + frag) || 0) <= 1; }
 
 module.exports = {
   cats: () => CATS.map(c => ({ id: c.id, icon: c.icon, name: c.name, count: byCat.get(c.id).length })),
@@ -189,24 +194,32 @@ module.exports = {
     const g = normalize(guess);
     if (!g) return false;
     const single = !g.includes(' ');
+    const fromBank = bankIds.has(item.id);
     for (const acc of item.accepts) {
       if (g === acc) return true;                       // مطابقة تامة
       if (fuzzyEq(g, acc)) return true;                 // غلطة حرف/اتنين
       if (!single) {
         /* تخمين من كذا كلمة جوه اسم أطول — بشرط إنه يوصّل لمدخل واحد بس */
         if (acc.includes(' ') && (' ' + acc + ' ').includes(' ' + g + ' ')
-            && !titleSet.has(g) && phraseUnique(item.cat, g)) return true;
+            && !titleSet.has(g) && phraseOk(item.cat, g)) return true;
         continue;
       }
-      /* كلمة واحدة جوه اسم مركّب — بس لو الكلمة مميّزة («صلاح» أيوه، «محمد» لأ) */
-      /* كلمة واحدة جوه اسم مركّب — بشرطين:
-         (1) تكون مميّزة في الكاتيجوري («صلاح» أيوه، «محمد» لأ)
-         (2) ماتكونش هي نفسها كلمة مستقلة في البنك — عشان «خروف» ما تتقبلش
-             مكان «خروف البحر»، و«غراب» ما تتقبلش مكان «فطر» (مرادفه عيش الغراب) */
+      /* كلمة واحدة جوه اسم مركّب */
       for (const w of acc.split(' ')) {
         if (w.length < 4) continue;
-        if (!distinctive(item.cat, w)) continue;
-        if (titleSet.has(g) && g !== normalize(item.title)) continue;
+        if (fromBank) {
+          /* كلمة من البنك: نعتمد على الإحصائيات — لازم تكون مميّزة
+             («صلاح» أيوه، «محمد» لأ) ومش مدخل مستقل لوحدها
+             (عشان «خروف» ما تتقبلش مكان «خروف البحر») */
+          if (!distinctive(item.cat, w)) continue;
+          if (titleSet.has(g) && g !== normalize(item.title)) continue;
+        } else {
+          /* كلمة المتّهم كتبها بنفسه: مفيش إحصائيات عنها، فالكلمة الواحدة
+             تتقبل بس لو هي معظم الاسم — «الأهرامات» من «الأهرامات الثلاثة» أيوه،
+             لكن «فريق» من «فريق الاتحاد الأوروبي» لأ */
+          if (w.length * 2 < acc.replace(/\s+/g, '').length) continue;
+          if (titleSet.has(g)) continue;
+        }
         if (g === w || fuzzyEq(g, w)) return true;
       }
     }
