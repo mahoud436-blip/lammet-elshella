@@ -22,7 +22,7 @@ body{margin:0;min-height:100vh;color:var(--ink);font-family:'Cairo',system-ui,sa
     var(--bg);
   display:flex;flex-direction:column;align-items:center;padding:var(--safe-top) 16px 44px}
 .topbar{width:100vw;height:5px;border-radius:0 0 10px 10px;opacity:.95;
-  background:linear-gradient(90deg,var(--teal),var(--brass-hi),var(--coral),var(--violet))}
+  background:linear-gradient(90deg,#EE72C0,#35CFA4,#9E7BFF,#5B9DFF,#FFC048)}
 .hero{text-align:center;margin:22px 0 6px}
 .hero img{width:min(300px,72vw);height:auto;filter:drop-shadow(0 14px 30px #0009)}
 .hero .s{color:var(--dim);margin-top:2px;font-weight:800;font-size:15px}
@@ -38,22 +38,24 @@ body{margin:0;min-height:100vh;color:var(--ink);font-family:'Cairo',system-ui,sa
 .game .nm{font-family:'Lalezar';font-size:28px;line-height:1.15}
 .game .ds{color:var(--dim);font-size:13.5px;margin-top:4px;line-height:1.7}
 .game .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-.tag{font-size:11.5px;font-weight:800;background:#0c1424;border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--dim)}
-.game.asal{border-color:#3d3418}
-.game.asal:hover{border-color:var(--brass)}
-.game.asal .nm{color:var(--brass-hi)}
-.game.wisper{background:linear-gradient(180deg,#221c3e,#181430);border-color:#372c5e}
-.game.wisper:hover{border-color:var(--violet)}
-.game.wisper .nm{color:var(--violet)}
-.game.lammaha{background:linear-gradient(180deg,#0e2f26,#0c2520);border-color:#1c5344}
-.game.lammaha:hover{border-color:#34e0a8}
-.game.lammaha .nm{color:#34e0a8}
-.game.jasoos{background:linear-gradient(180deg,#241d43,#1b1633);border-color:#4c3a86}
-.game.jasoos:hover{border-color:#a78bfa}
-.game.jasoos .nm{color:#a78bfa}
-.game.conan{background:linear-gradient(180deg,#16264a,#101c36);border-color:#2a4a86}
-.game.conan:hover{border-color:#60a5fa}
-.game.conan .nm{color:#60a5fa}
+.tag{font-size:11.5px;font-weight:800;background:#00000038;border:1px solid #ffffff1f;border-radius:999px;padding:4px 10px;color:#c9d4e6}
+/* باليتة موحّدة: كل الكروت نفس الغمقان ونفس قوة اللمسة اللونية،
+   والهوية بتيجي من اسم اللعبة والإطار — خمس درجات موزّعة على عجلة الألوان */
+.game.wisper {background:linear-gradient(180deg,#331d3a,#241428);border-color:#573255}
+.game.wisper:hover {border-color:#EE72C0}
+.game.wisper .nm {color:#EE72C0}
+.game.lammaha{background:linear-gradient(180deg,#16302f,#101f21);border-color:#245853}
+.game.lammaha:hover{border-color:#35CFA4}
+.game.lammaha .nm{color:#35CFA4}
+.game.jasoos {background:linear-gradient(180deg,#241f48,#181433);border-color:#3d3472}
+.game.jasoos:hover {border-color:#9E7BFF}
+.game.jasoos .nm {color:#9E7BFF}
+.game.conan  {background:linear-gradient(180deg,#182a4d,#111d36);border-color:#2c4573}
+.game.conan:hover  {border-color:#5B9DFF}
+.game.conan .nm  {color:#5B9DFF}
+.game.asal   {background:linear-gradient(180deg,#33291a,#231c11);border-color:#5a4526}
+.game.asal:hover   {border-color:#FFC048}
+.game.asal .nm   {color:#FFC048}
 .game .go{margin-inline-start:auto;font-size:20px;opacity:.45;align-self:center}
 .foot{margin-top:28px;color:var(--dim);font-size:13px;text-align:center;max-width:480px;line-height:1.9}
 .foot b{color:var(--brass-hi)}
@@ -71,15 +73,6 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-to
   <div class="s">ألعاب القعدة كلها في حتة واحدة 🎉</div>
 </div>
 <div class="games">
-  <a class="game asal" href="/tahadi/">
-    <div class="ic"><img src="/img/asal.webp" alt=""></div>
-    <div>
-      <div class="nm">اسأل واستفيد</div>
-      <div class="ds">كل واحد يجهّز أسئلة معلومات (اختيار من 3) — يكتبها أو يسحبها من بنك 1000 سؤال — وبعدين الكل يجاوب على أسئلة بعض. اللي يجاوب صح وبسرعة يكسب أكتر 💡</div>
-      <div class="tags"><span class="tag">2–12 لاعب</span><span class="tag">10 كاتيجوري</span><span class="tag">بنك 1000 سؤال</span></div>
-    </div>
-    <span class="go">◀</span>
-  </a>
   <a class="game wisper" href="/wisper/">
     <div class="ic"><img src="/img/wisper.webp" alt=""></div>
     <div>
@@ -113,6 +106,16 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-to
       <div class="nm">المحقق والمتهم</div>
       <div class="ds">واحد معاه كلمة سرية، وانتوا بتحققوا معاه بأسئلة إجابتها «أه / لا / مش قادر أحدد». اللي يوصل للكلمة بدري ياخد نقط أكتر 🔎</div>
       <div class="tags"><span class="tag">3–12 لاعب</span><span class="tag">أسئلة واستنتاج</span><span class="tag">8 كاتيجوري</span></div>
+    </div>
+    <span class="go">◀</span>
+  </a>
+
+  <a class="game asal" href="/tahadi/">
+    <div class="ic"><img src="/img/asal.webp" alt=""></div>
+    <div>
+      <div class="nm">اسأل واستفيد</div>
+      <div class="ds">كل واحد يجهّز أسئلة معلومات (اختيار من 3) — يكتبها أو يسحبها من بنك 1000 سؤال — وبعدين الكل يجاوب على أسئلة بعض. اللي يجاوب صح وبسرعة يكسب أكتر 💡</div>
+      <div class="tags"><span class="tag">2–12 لاعب</span><span class="tag">10 كاتيجوري</span><span class="tag">بنك 1000 سؤال</span></div>
     </div>
     <span class="go">◀</span>
   </a>

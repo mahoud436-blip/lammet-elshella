@@ -1,3 +1,32 @@
+
+/* «جاسوس خمّن الكلمة صح ومتحسبتش؟» — شبكة أمان لو النظام فاته إجابة مظبوطة */
+function creditCard(st) {
+  const list = st.creditList || [];
+  if (!list.length) return '';
+  return `<div class="card credit-card">
+    <div class="credit-head">🤔 جاسوس خمّن الكلمة صح ومتحسبتش؟</div>
+    <div class="credit-sub">لو تخمين الجاسوس كان مظبوط والنظام مقبلهوش — احسبه له من هنا</div>
+    ${list.map(c => `<button class="credit-row ${c.done ? 'done' : ''}" data-credit="${c.id}" ${c.done ? 'disabled' : ''}>
+        <span class="cr-who">${c.avatar} ${esc(c.name)}</span>
+        <span class="cr-txt">«${esc(c.text)}»</span>
+        <span class="cr-act">${c.done ? 'اتحسبت ✅' : 'احسبها له'}</span>
+      </button>`).join('')}
+  </div>`;
+}
+function wireCredit() {
+  $$('[data-credit]').forEach(el => el.onclick = async () => {
+    if (el.disabled) return;
+    const who = (el.querySelector('.cr-who') || {}).textContent || '';
+    const txt = (el.querySelector('.cr-txt') || {}).textContent || '';
+    const go = await uiConfirm(`هتحسب إجابة ${who.trim()} ${txt.trim()} صح، وهياخد نقطها.`,
+      { emoji: '✅', title: 'تحسبها له؟', okLabel: 'أيوه، احسبها', cancelLabel: 'لأ' });
+    if (!go) return;
+    el.disabled = true;
+    const r = await act('creditGuess', { target: el.dataset.credit });
+    if (r && r.ok) { Snd.play('correct'); toast('اتحسبت ✅'); }
+    else { el.disabled = false; toast((r && r.error) || 'مانفعش'); }
+  });
+}
 /* الجاسوس — واجهة اللعبة (لمّة الشلة) */
 'use strict';
 const $ = (sel, root) => (root || document).querySelector(sel);
@@ -538,6 +567,7 @@ function renderReveal(st) {
     ${!guessing ? `<div class="card"><h3 class="mb">📝 الكلمات اللي اتقالت</h3>${(R.words || []).map(w => `<div class="guess-item" style="${w.wasSpy ? 'border-color:var(--coral)' : ''}"><span class="who">${w.avatar} ${esc(w.name)}${w.wasSpy ? ' 🕵️' : ''}</span><span class="gtext">${esc(w.word)}</span></div>`).join('')}</div>
     <div class="card"><h3 class="mb">📊 النقط ${st.isLastRound ? '' : '(تراكمية)'}</h3>${board.map((p, i) => `<div class="rank-row ${p.id === st.you.id ? 'me' : ''}"><span class="pos">${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' 🚪' : ''}</span><span class="sc">${p.score}</span></div>`).join('')}</div>
     <div class="card tight center">
+    ${st.canCredit ? creditCard(st) : ''}
       ${st.youReady ? '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>' : `<button class="btn primary big" id="ready-btn">${st.isLastRound ? '🏁 النتيجة النهائية' : '⬅️ الجولة الجاية'}</button>`}
       <div class="muted small mt">جاهزين: <span id="r-n">${st.readyIds.length}</span>/${st.players.filter(p => p.connected).length}</div>
       ${st.you.isHost ? '<button class="btn sm ghost mt" id="force-btn" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button>' : ''}
@@ -550,6 +580,7 @@ function renderReveal(st) {
     $('#sg-in').onkeydown = e => { if (e.key === 'Enter' && !sgb.disabled) send(); };
     setTimeout(() => { const el = $('#sg-in'); if (el) el.focus(); }, 100);
   }
+  wireCredit();
   const rb = $('#ready-btn'); if (rb) rb.onclick = async () => { Snd.play('pick'); rb.disabled = true; const r = await act('readyNext'); if (r.ok) rb.outerHTML = '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>'; else rb.disabled = false; };
   const fb = $('#force-btn'); if (fb) fb.onclick = async () => { if (await uiConfirm('تكمّلوا من غير المتأخرين؟', { emoji: '⏭️', okLabel: 'كمّل', danger: false })) act('forceNext'); };
 }

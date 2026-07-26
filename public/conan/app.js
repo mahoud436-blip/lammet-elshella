@@ -1,3 +1,32 @@
+
+/* «حد جاوب صح ومتحسبتش؟» — شبكة أمان لو النظام فاته إجابة مظبوطة */
+function creditCard(st) {
+  const list = st.creditList || [];
+  if (!list.length) return '';
+  return `<div class="card credit-card">
+    <div class="credit-head">🤔 حد جاوب صح ومتحسبتش؟</div>
+    <div class="credit-sub">انت اللي عارف الكلمة — لو شايف إجابة كانت مظبوطة والنظام مقبلهاش، احسبها له من هنا</div>
+    ${list.map(c => `<button class="credit-row ${c.done ? 'done' : ''}" data-credit="${c.id}" ${c.done ? 'disabled' : ''}>
+        <span class="cr-who">${c.avatar} ${esc(c.name)}</span>
+        <span class="cr-txt">«${esc(c.text)}»</span>
+        <span class="cr-act">${c.done ? 'اتحسبت ✅' : 'احسبها له'}</span>
+      </button>`).join('')}
+  </div>`;
+}
+function wireCredit() {
+  $$('[data-credit]').forEach(el => el.onclick = async () => {
+    if (el.disabled) return;
+    const who = (el.querySelector('.cr-who') || {}).textContent || '';
+    const txt = (el.querySelector('.cr-txt') || {}).textContent || '';
+    const go = await uiConfirm(`هتحسب إجابة ${who.trim()} ${txt.trim()} صح، وهياخد نقطها.`,
+      { emoji: '✅', title: 'تحسبها له؟', okLabel: 'أيوه، احسبها', cancelLabel: 'لأ' });
+    if (!go) return;
+    el.disabled = true;
+    const r = await act('creditGuess', { target: el.dataset.credit });
+    if (r && r.ok) { Snd.play('correct'); toast('اتحسبت ✅'); }
+    else { el.disabled = false; toast((r && r.error) || 'مانفعش'); }
+  });
+}
 /* المحقق والمتهم — واجهة اللعبة (لمّة الشلة) — نسخة مُعاد بناؤها */
 'use strict';
 const $ = (sel, root) => (root || document).querySelector(sel);
@@ -577,6 +606,7 @@ function buildCaseEnd(st) {
     <details class="case-rev"><summary><span class="cr-w">📜 سجل التحقيق</span></summary><div class="cr-body">
       ${(r.history || []).length ? (r.history || []).map(h => `<div class="log-item"><div class="muted small">ج${h.round} · ${h.avatar} ${esc(h.name)}</div><div style="font-weight:800">${esc(h.text)}</div>${h.answer ? `<span class="ans-badge ${h.answer}" style="font-size:14px;padding:2px 10px">${ANS_TXT[h.answer]}</span>` : ''}</div>`).join('') : '<div class="muted small">مفيش أسئلة</div>'}
     </div></details>
+    ${st.canCredit ? creditCard(st) : ''}
     <div class="card"><h3 class="mb">📊 الترتيب لحد دلوقتي</h3>${ranking.map((p, i) => `<div class="rank-row ${p.id === st.you.id ? 'me' : ''}"><span class="pos">#${i + 1}</span><span>${p.avatar}</span><span>${esc(p.name)}</span><span class="sc">${p.score}</span></div>`).join('')}</div>
     <div class="card tight center">
       ${st.youReady
@@ -585,6 +615,7 @@ function buildCaseEnd(st) {
       <div class="muted small mt">جاهزين: <span id="r-n">${(st.readyIds || []).length}</span>/${readyTotal}</div>
       ${st.you.isHost ? '<button class="btn sm ghost mt" id="force-btn" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button>' : ''}
     </div>`;
+  wireCredit();
   lockBtn($('#ready-btn'), () => { Snd.play('pick'); return act('readyNext'); });
   const fb = $('#force-btn'); if (fb) fb.onclick = async () => { if (await uiConfirm('تكمّلوا من غير المتأخرين؟', { emoji: '⏭️', okLabel: 'كمّل', danger: false })) act('forceNext'); };
 }

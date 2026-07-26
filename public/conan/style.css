@@ -461,3 +461,17 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-to
 .safe-ctl button:active{filter:brightness(1.3)}
 .safe-ctl b{min-width:34px;text-align:center;font-size:14px;color:var(--brass-hi,#FFB93E)}
 .safe-hint{font-size:11px;color:var(--muted,#8fa0bd);line-height:1.5;padding:0 2px 6px;text-align:center}
+
+/* كارت «حد جاوب صح ومتحسبتش؟» */
+.credit-card{border-color:#3a5a4e}
+.credit-head{font-family:'Lalezar','Cairo',sans-serif;font-size:19px;color:var(--brass-hi);text-align:center}
+.credit-sub{font-size:12px;color:var(--muted,#8fa0bd);text-align:center;line-height:1.6;margin:4px 0 10px}
+.credit-row{display:flex;align-items:center;gap:8px;width:100%;text-align:start;cursor:pointer;
+  background:#12233a;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px;
+  font-family:inherit;font-size:14px;color:inherit}
+.credit-row:active{filter:brightness(1.15)}
+.credit-row .cr-who{font-weight:900;white-space:nowrap}
+.credit-row .cr-txt{color:var(--ink-dim,#B9C3D8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.credit-row .cr-act{margin-inline-start:auto;font-size:12px;font-weight:900;color:var(--ok,#2ec27e);white-space:nowrap}
+.credit-row.done{opacity:.6;cursor:default;border-color:#2c5b45;background:#12291f}
+.credit-row[disabled]{cursor:default}

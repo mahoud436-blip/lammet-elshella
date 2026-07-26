@@ -1,3 +1,33 @@
+
+/* «حد جاوب صح ومتحسبتش؟» — الملمّح بس هو اللي بيشوفها.
+   النظام بيصحّح أوتوماتيك، ودي شبكة الأمان لو فاتته إجابة مظبوطة. */
+function creditCard(st) {
+  const list = st.creditList || [];
+  if (!list.length) return '';
+  return `<div class="card credit-card">
+    <div class="credit-head">🤔 حد جاوب صح ومتحسبتش؟</div>
+    <div class="credit-sub">لو شايف إجابة كانت مظبوطة والنظام مقبلهاش — احسبها له من هنا</div>
+    ${list.map(c => `<button class="credit-row ${c.done ? 'done' : ''}" data-credit="${c.id}" ${c.done ? 'disabled' : ''}>
+        <span class="cr-who">${c.avatar} ${esc(c.name)}</span>
+        <span class="cr-txt">«${esc(c.text)}»</span>
+        <span class="cr-act">${c.done ? 'اتحسبت ✅' : 'احسبها له'}</span>
+      </button>`).join('')}
+  </div>`;
+}
+function wireCredit() {
+  $$('[data-credit]').forEach(el => el.onclick = async () => {
+    if (el.disabled) return;
+    const who = (el.querySelector('.cr-who') || {}).textContent || '';
+    const txt = (el.querySelector('.cr-txt') || {}).textContent || '';
+    const go = await uiConfirm(`هتحسب إجابة ${who.trim()} ${txt.trim()} صح، وهياخد نقط الجولة.`,
+      { emoji: '✅', title: 'تحسبها له؟', okLabel: 'أيوه، احسبها', cancelLabel: 'لأ' });
+    if (!go) return;
+    el.disabled = true;
+    const r = await act('creditGuess', { target: el.dataset.credit });
+    if (r && r.ok) { Snd.play('correct'); toast('اتحسبت ✅'); }
+    else { el.disabled = false; toast((r && r.error) || 'مانفعش'); }
+  });
+}
 /* خليك لمَّاح — واجهة اللعبة (لمّة الشلة) */
 'use strict';
 const $ = (sel, root) => (root || document).querySelector(sel);
@@ -515,6 +545,7 @@ function renderReveal(st) {
       <div class="guess-item" style="background:#123a2e"><span class="who">💡 تلميحة ${h.n}</span><span class="gtext">${esc(h.text)}</span></div>
       ${h.guesses.map(g => `<div class="guess-item ${g.correct ? 'correct' : ''}"><span class="who">${g.avatar} ${esc(g.name)}</span><span class="gtext">${esc(g.text)} ${g.correct ? '✅' : '❌'}</span></div>`).join('')}
     `).join('')}</div>` : ''}
+    ${st.canCredit ? creditCard(st) : ''}
     <div class="card">
       <h3 class="mb">📊 النقط دلوقتي</h3>
       ${board.map((p, i) => `<div class="rank-row ${p.id === st.you.id ? 'me' : ''}"><span class="pos">${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' 🚪' : ''}</span><span class="sc">${p.score}</span></div>`).join('')}
@@ -524,6 +555,7 @@ function renderReveal(st) {
       <div class="muted small mt">جاهزين: <span id="r-n">${st.readyIds.length}</span>/${st.players.filter(p => p.connected).length}</div>
       ${st.you.isHost ? '<button class="btn sm ghost mt" id="force-btn" style="width:100%">⏭️ كمّلوا من غير المتأخرين</button>' : ''}
     </div>`;
+  wireCredit();
   const rb = $('#ready-btn'); if (rb) rb.onclick = async () => { Snd.play('pick'); const r = await act('readyNext'); if (r.ok) rb.outerHTML = '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>'; };
   const fb = $('#force-btn'); if (fb) fb.onclick = async () => { if (await uiConfirm('تكمّلوا من غير المتأخرين؟', { emoji: '⏭️', okLabel: 'كمّل', danger: false })) act('forceNext'); };
   const lb = $('#leave-btn2'); if (lb) lb.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
