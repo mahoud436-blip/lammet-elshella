@@ -50,12 +50,12 @@ body{margin:0;min-height:100vh;color:var(--ink);font-family:'Cairo',system-ui,sa
 .game.jasoos {background:linear-gradient(180deg,#241f48,#181433);border-color:#3d3472}
 .game.jasoos:hover {border-color:#9E7BFF}
 .game.jasoos .nm {color:#9E7BFF}
-.game.conan  {background:linear-gradient(180deg,#182a4d,#111d36);border-color:#2c4573}
-.game.conan:hover  {border-color:#5B9DFF}
-.game.conan .nm  {color:#5B9DFF}
-.game.asal   {background:linear-gradient(180deg,#33291a,#231c11);border-color:#5a4526}
-.game.asal:hover   {border-color:#FFC048}
-.game.asal .nm   {color:#FFC048}
+.game.asal   {background:linear-gradient(180deg,#182a4d,#111d36);border-color:#2c4573}
+.game.asal:hover   {border-color:#5B9DFF}
+.game.asal .nm   {color:#5B9DFF}
+.game.conan  {background:linear-gradient(180deg,#33291a,#231c11);border-color:#5a4526}
+.game.conan:hover  {border-color:#FFC048}
+.game.conan .nm  {color:#FFC048}
 .game .go{margin-inline-start:auto;font-size:20px;opacity:.45;align-self:center}
 .foot{margin-top:28px;color:var(--dim);font-size:13px;text-align:center;max-width:480px;line-height:1.9}
 .foot b{color:var(--brass-hi)}
@@ -64,6 +64,30 @@ body{margin:0;min-height:100vh;color:var(--ink);font-family:'Cairo',system-ui,sa
 /* خلفية صلبة ورا شريط إشعارات الموبايل — عشان محتوى اللعبة ما يظهرش تحته */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-top);
   background:var(--bg2,#0B1322);z-index:120;pointer-events:none}
+
+/* مفتاح مسافة شريط الإشعارات — هادي تحت، يبان لما تدوّر عليه */
+.tools{margin-top:26px;display:flex;justify-content:center}
+.tool-btn{display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  background:#0000002e;border:1px solid #ffffff1a;border-radius:999px;padding:7px 14px;
+  color:#8fa0bd;font:inherit;font-size:12.5px;font-weight:700;transition:.15s}
+.tool-btn:hover{color:#c9d4e6;border-color:#ffffff33;background:#0000004d}
+.tool-btn svg{width:15px;height:15px;stroke:currentColor;fill:none}
+.notch-ov{position:fixed;inset:0;z-index:400;background:#000c;display:flex;align-items:center;
+  justify-content:center;padding:calc(16px + var(--safe-top)) 16px 16px}
+.notch-card{background:var(--surface,#16223c);border:2px solid var(--line,#2a3a5c);border-radius:22px;
+  padding:20px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px #000b}
+.notch-card h3{margin:0 0 6px;font-family:'Lalezar',sans-serif;font-size:22px;color:#c9d4e6;font-weight:400}
+.notch-card p{margin:0 0 16px;font-size:12.5px;color:#8fa0bd;line-height:1.8}
+.notch-ctl{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:6px}
+.notch-ctl button{width:46px;height:46px;border-radius:14px;font-size:24px;font-weight:900;line-height:1;
+  background:#0d1830;border:1.5px solid var(--line,#2a3a5c);color:#c9d4e6;cursor:pointer}
+.notch-ctl button:active{filter:brightness(1.4)}
+.notch-ctl b{min-width:64px;font-size:26px;color:#FFC048;font-family:'Lalezar',sans-serif;font-weight:400}
+.notch-auto{font-size:11.5px;color:#7e8ba5;margin-bottom:14px}
+.notch-card .row2{display:flex;gap:10px}
+.notch-card .row2 button{flex:1;padding:11px;border-radius:14px;font:inherit;font-weight:800;font-size:14px;cursor:pointer}
+.notch-reset{background:#0d1830;border:1.5px solid var(--line,#2a3a5c);color:#8fa0bd}
+.notch-done{background:linear-gradient(180deg,#3f7fe0,#2b5fb5);border:1.5px solid #24509b;color:#fff}
 </style>
 </head>
 <body>
@@ -78,7 +102,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-to
     <div>
       <div class="nm">حبر سري</div>
       <div class="ds">كل جولة ليها عنوان، والكل يكتب إجابته في السر. بعدين الإجابات بتتقلب من غير أسماء، وتخمّنوا واحدة واحدة مين كتب إيه. اللي يقرا صحابه صح ياخد النقط 🕵️</div>
-      <div class="tags"><span class="tag">3–15 لاعب</span><span class="tag">تخمين وضحك</span><span class="tag">بنك 200 عنوان</span></div>
+      <div class="tags"><span class="tag">3–12 لاعب</span><span class="tag">تخمين وضحك</span><span class="tag">بنك 200 عنوان</span></div>
     </div>
     <span class="go">◀</span>
   </a>
@@ -100,16 +124,6 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-to
     </div>
     <span class="go">◀</span>
   </a>
-  <a class="game conan" href="/conan/">
-    <div class="ic"><img src="/img/conan-sm.png" alt=""></div>
-    <div>
-      <div class="nm">المحقق والمتهم</div>
-      <div class="ds">واحد معاه كلمة سرية، وانتوا بتحققوا معاه بأسئلة إجابتها «أه / لا / مش قادر أحدد». اللي يوصل للكلمة بدري ياخد نقط أكتر 🔎</div>
-      <div class="tags"><span class="tag">3–12 لاعب</span><span class="tag">أسئلة واستنتاج</span><span class="tag">8 كاتيجوري</span></div>
-    </div>
-    <span class="go">◀</span>
-  </a>
-
   <a class="game asal" href="/tahadi/">
     <div class="ic"><img src="/img/asal.webp" alt=""></div>
     <div>
@@ -119,10 +133,64 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-to
     </div>
     <span class="go">◀</span>
   </a>
+
+  <a class="game conan" href="/conan/">
+    <div class="ic"><img src="/img/conan-sm.png" alt=""></div>
+    <div>
+      <div class="nm">المحقق والمتهم</div>
+      <div class="ds">واحد معاه كلمة سرية، وانتوا بتحققوا معاه بأسئلة إجابتها «أه / لا / مش قادر أحدد». اللي يوصل للكلمة بدري ياخد نقط أكتر 🔎</div>
+      <div class="tags"><span class="tag">3–12 لاعب</span><span class="tag">أسئلة واستنتاج</span><span class="tag">8 كاتيجوري</span></div>
+    </div>
+    <span class="go">◀</span>
+  </a>
+</div>
+
+<div class="tools">
+  <button class="tool-btn" id="notch-btn" type="button">
+    <svg viewBox="0 0 24 24" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="2.5" width="14" height="19" rx="3"/><path d="M9.5 2.5h5M12 8.5v7m0 0-2.2-2.2M12 15.5l2.2-2.2"/>
+    </svg>
+    مسافة شريط الإشعارات
+  </button>
 </div>
 <div class="foot">
   كل لعبة بتتلعب <b>أونلاين</b> من أي حتة أو <b>على نفس الواي فاي</b> من غير نت خارجي.<br>
   كل واحد بيلعب من متصفح موبايله — مفيش حاجة بتتنزّل 📱
 </div>
+
+<script>
+/* مسافة شريط الإشعارات — بتتظبط من هنا وبتسري على كل الألعاب (محفوظة للجهاز) */
+(function () {
+  var btn = document.getElementById('notch-btn');
+  if (!btn || !window.SafeTop) return;
+  btn.onclick = function () {
+    var ov = document.createElement('div');
+    ov.className = 'notch-ov';
+    ov.innerHTML = '<div class="notch-card">' +
+      '<h3>مسافة شريط الإشعارات</h3>' +
+      '<p>لو محتوى اللعبة داخل تحت الساعة والبطارية، زوّدها. ولو في فراغ زيادة فوق، قلّلها.<br>الإعداد ده بيسري على الخمس ألعاب.</p>' +
+      '<div class="notch-ctl"><button type="button" data-d="-4">−</button><b id="nv">0</b><button type="button" data-d="4">+</button></div>' +
+      '<div class="notch-auto" id="na"></div>' +
+      '<div class="row2"><button type="button" class="notch-reset" id="nr">رجّع التلقائي</button>' +
+      '<button type="button" class="notch-done" id="nd">تمام</button></div></div>';
+    document.body.appendChild(ov);
+    var nv = ov.querySelector('#nv'), na = ov.querySelector('#na');
+    function show() {
+      nv.textContent = SafeTop.value;
+      na.textContent = SafeTop.isCustom()
+        ? 'مظبوطة يدوي (الجهاز بيقول ' + SafeTop.auto + ')'
+        : 'تلقائي من الجهاز';
+    }
+    show();
+    ov.querySelectorAll('[data-d]').forEach(function (b) {
+      b.onclick = function () { SafeTop.set(SafeTop.value + (+b.dataset.d)); show(); };
+    });
+    ov.querySelector('#nr').onclick = function () { SafeTop.reset(); show(); };
+    var close = function () { ov.remove(); };
+    ov.querySelector('#nd').onclick = close;
+    ov.onclick = function (e) { if (e.target === ov) close(); };
+  };
+})();
+</script>
 </body>
 </html>

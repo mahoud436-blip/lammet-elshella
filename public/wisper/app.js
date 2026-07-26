@@ -1,3 +1,13 @@
+
+/* أيقونات الباب — باب مفتوح وسهم بيوضّح داخل ولا خارج */
+const DOOR_OUT = '<svg class="ico-door" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M18.5 12H10m0 0 3-3m-3 3 3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<circle cx="8.4" cy="12" r=".95" fill="currentColor"/></svg>';
+const DOOR_IN = '<svg class="ico-door" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M10 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M5.5 12H14m0 0-3-3m3 3-3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<circle cx="16.4" cy="12" r=".95" fill="currentColor"/></svg>';
 /* حبر سري — واجهة اللعبة (لمّة الشلة) */
 'use strict';
 
@@ -144,7 +154,7 @@ function header(sub) {
     <button class="btn sm ghost" id="home-btn">🏠</button>
     <button class="btn sm ghost" id="mute-btn">${Snd.muted ? '🔇' : '🔊'}</button>
   </div>
-  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">🚪</button>' : ''}`;
+  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">${DOOR_OUT}</button>' : ''}`;
 }
 function bindHeader() {}
 /* تفويض عام: الأزرار شغالة في كل الشاشات دايمًا */
@@ -158,7 +168,7 @@ document.addEventListener('click', async (e) => {
   }
   else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
   else if (t.id === 'leave-fab') {
-    if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب في النتيجة النهائية', { emoji: '🚪', title: 'خروج من الروم', okLabel: 'اخرج', cancelLabel: 'استنى' })) return;
+    if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب في النتيجة النهائية', { emoji: DOOR_OUT, title: 'خروج من الروم', okLabel: 'اخرج', cancelLabel: 'استنى' })) return;
     await act('leave'); leaveLocal();
   }
 });
@@ -182,9 +192,9 @@ function renderHome(prefillCode) {
       <button class="btn primary big mt" id="create-btn">🖋️ اعمل روم جديد</button>
       <div class="or">أو</div>
       <input class="field code-input" id="code-in" inputmode="numeric" maxlength="4" placeholder="• • • •" value="${esc(code)}">
-      <button class="btn teal big mt" id="join-btn">🚪 ادخل الروم</button>
+      <button class="btn teal big mt" id="join-btn">${DOOR_IN}  ادخل الروم</button>
     </div>
-    <div class="card tight center muted small">من 3 لـ 15 لاعب — كل واحد من متصفح موبايله 📱</div>`;
+    <div class="card tight center muted small">من 3 لـ 12 لاعب — كل واحد من متصفح موبايله 📱</div>`;
   bindHeader();
   $('#av-btn').onclick = () => {
     Snd.play('pick');
@@ -273,7 +283,7 @@ function renderLobby(st) {
           ${isHost && !p.isHost ? `<button class="kick" data-kick="${p.id}">✕</button>` : ''}
           <div class="av">${p.avatar}</div>
           <div class="nm">${esc(p.name)}${p.id === me.id ? ' (انت)' : ''}</div>
-          <div class="st">${p.left ? 'خرج 🚪' : (p.connected ? 'موجود ✅' : 'اتفصل ⏳')}</div>
+          <div class="st">${p.left ? 'خرج ' + DOOR_OUT : (p.connected ? 'موجود ✅' : 'اتفصل ⏳')}</div>
         </div>`).join('')}
       </div>
       ${st.players.length < 3 ? '<div class="center muted small mt">محتاجين 3 على الأقل — التخمين بين اتنين مش لعبة 😄</div>' : ''}
@@ -299,7 +309,7 @@ function renderLobby(st) {
     ${isHost
       ? `<button class="btn primary big" id="start-btn" ${canStart ? '' : 'disabled'}>🚀 يلا نبدأ</button>`
       : `<div class="card tight center">مستنيين <b>${esc(hostName)}</b> 👑 يدوس بدء 🚀</div>`}
-    <button class="btn ghost big mt" id="leave-btn">🚪 اخرج من الروم</button>`;
+    <button class="btn ghost big mt" id="leave-btn">${DOOR_OUT}  اخرج من الروم</button>`;
   bindHeader();
   try {
     const q = window.qrcode(0, 'M'); q.addData(url); q.make();
@@ -316,7 +326,7 @@ function renderLobby(st) {
     $('#start-btn').onclick = () => { Snd.play('q'); act('startGame'); };
     $$('.kick').forEach(b => b.onclick = async () => { if (await uiConfirm('متأكد عايز تطرده من الروم؟', { emoji: '👋', title: 'طرد لاعب', okLabel: 'اطرده' })) act('kick', { playerId: b.dataset.kick }); });
   }
-  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: DOOR_OUT, okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 /* ======================= عناصر مشتركة ======================= */
@@ -624,7 +634,7 @@ function renderGameover(st) {
     </div>
     <div class="card">
       <h3 class="mb">📊 الترتيب</h3>
-      ${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">🚪 خرج</span>' : ''}</span><span class="muted small">(${p.correct} تخمينة صح)</span><span class="sc">${p.score}</span></div>`).join('')}
+      ${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">${DOOR_OUT} خرج</span>' : ''}</span><span class="muted small">(${p.correct} تخمينة صح)</span><span class="sc">${p.score}</span></div>`).join('')}
     </div>
     <div class="card">
       <h3 class="mb">📚 مراجعة الجولات — مين خمّن صح ومين غلط</h3>
@@ -651,7 +661,7 @@ function renderGameover(st) {
   bindHeader();
   const ab = $('#again-btn');
   if (ab) ab.onclick = () => act('playAgain');
-  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: DOOR_OUT, okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 /* ======================= الهيلب ======================= */
@@ -662,7 +672,7 @@ const WISPER_STEPS = [
   ['😏', 'إجابتك انت', 'لما إجابتك تيجي، بتتفرج عليهم وهما بيدوّروا على صاحبها — من غير ما تختار.'],
   ['🏆', 'النقط', 'كل تخمينة صح = <span class="hl">100 نقطة</span>. وفي الآخر النتيجة بتظهر في صفحة واحدة فيها كل إجابة وصاحبها ومين خمّن صح.'],
   ['🎲', 'أنواع الجولات', 'الهوست بيحدد عددها: <b>✍️</b> لاعب عشوائي يكتب العنوان (<span class="hl">ومحدش هيعرف مين هو أبدًا</span>)، <b>🗳️</b> تصويت على عنوان من 3، <b>🎲</b> عنوان عشوائي.'],
-  ['🚪', 'حاجات مهمة', 'العناوين متتكررش في الروم أبدًا. ولو خرجت سكورك بيفضل محسوب، ولو النت قطع ارجع بنفس الجهاز.'],
+  [DOOR_OUT, 'حاجات مهمة', 'العناوين متتكررش في الروم أبدًا. ولو خرجت سكورك بيفضل محسوب، ولو النت قطع ارجع بنفس الجهاز.'],
 ];
 function showHelp() {
   const ov = document.createElement('div');
@@ -681,31 +691,11 @@ function showHelp() {
             <div><h4>${t}</h4><p>${d}</p></div>
           </div>`).join('')}
       </div>
-      <div class="help-foot"><div class="safe-row">
-      <span>مسافة فوق شريط الإشعارات</span>
-      <span class="safe-ctl">
-        <button type="button" id="safe-minus" aria-label="أقل">−</button>
-        <b id="safe-val">0</b>
-        <button type="button" id="safe-plus" aria-label="أكتر">+</button>
-      </span>
-    </div>
-    <div class="safe-hint">لو محتوى اللعبة داخل تحت الساعة والبطارية، زوّدها. ولو في فراغ زيادة فوق، قلّلها.</div>
-    
-        <label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label>
+      <div class="help-foot"><label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label>
         <button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button>
       </div>
     </div>`;
   document.body.appendChild(ov);
-  /* ظبط المسافة فوق — بتتحفظ على الجهاز ده لوحده */
-  (function () {
-    if (!window.SafeTop) return;
-    const vEl = $('#safe-val'); if (!vEl) return;
-    const show = () => { vEl.textContent = SafeTop.value + (SafeTop.isCustom() ? '' : '*'); };
-    show();
-    const bump = (d) => { SafeTop.set(SafeTop.value + d); show(); };
-    $('#safe-minus').onclick = (e) => { e.stopPropagation(); bump(-4); };
-    $('#safe-plus').onclick = (e) => { e.stopPropagation(); bump(4); };
-  })();
   const close = () => { if ($('#help-off') && $('#help-off').checked) LS.set('lamma_help_off_wisper', true); ov.remove(); };
   $('#help-ok').onclick = close;
   ov.onclick = e => { if (e.target === ov) close(); };

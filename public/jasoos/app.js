@@ -1,4 +1,14 @@
 
+/* أيقونات الباب — باب مفتوح وسهم بيوضّح داخل ولا خارج */
+const DOOR_OUT = '<svg class="ico-door" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M18.5 12H10m0 0 3-3m-3 3 3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<circle cx="8.4" cy="12" r=".95" fill="currentColor"/></svg>';
+const DOOR_IN = '<svg class="ico-door" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M10 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M5.5 12H14m0 0-3-3m3 3-3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<circle cx="16.4" cy="12" r=".95" fill="currentColor"/></svg>';
+
 /* «جاسوس خمّن الكلمة صح ومتحسبتش؟» — شبكة أمان لو النظام فاته إجابة مظبوطة */
 function creditCard(st) {
   const list = st.creditList || [];
@@ -140,7 +150,7 @@ function header(sub) {
     <button class="btn sm ghost" id="home-btn">🏠</button>
     <button class="btn sm ghost" id="mute-btn">${Snd.muted ? '🔇' : '🔊'}</button>
   </div>
-  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">🚪</button>' : ''}
+  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">${DOOR_OUT}</button>' : ''}
   <div id="presence-bar" class="presence-bar hidden"></div>`;
 }
 function bindHeader() {}
@@ -151,7 +161,7 @@ document.addEventListener('click', async (e) => {
   else if (t.id === 'home-btn') { if (S.save && !await uiConfirm('ترجع للمّة؟ مكانك في الروم محفوظ', { emoji: '🏠', okLabel: 'ارجع', cancelLabel: 'فضّل هنا' })) return; location.href = '/'; }
   else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
   else if (t.id === 'force-play') { if (await uiConfirm('تكمّلوا من غير اللي متأخر؟ اللعبة هتمشي من غيره وسكوره بيفضل محسوب', { emoji: '⏭️', title: 'كمّلوا من غيره', okLabel: 'كمّل', cancelLabel: 'استنى' })) act('forceNext'); }
-  else if (t.id === 'leave-fab') { if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', title: 'خروج', okLabel: 'اخرج', cancelLabel: 'استنى' })) return; await act('leave'); leaveLocal(); }
+  else if (t.id === 'leave-fab') { if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: DOOR_OUT, title: 'خروج', okLabel: 'اخرج', cancelLabel: 'استنى' })) return; await act('leave'); leaveLocal(); }
 });
 function updPresence(st) {
   const el = $('#presence-bar'); if (!el) return;
@@ -160,7 +170,7 @@ function updPresence(st) {
   if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); return; }
   el.innerHTML = st.players.map(p => {
     const cls = p.left ? 'gone' : (!p.connected ? 'off' : (p.away ? 'away' : 'here'));
-    const badge = p.left ? '🚪' : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
+    const badge = p.left ? DOOR_OUT : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
     return `<span class="pv ${cls}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
   }).join('');
   /* تحذير الغشاش: مين خارج من اللعبة دلوقتي */
@@ -189,7 +199,7 @@ function renderHome(prefillCode) {
       <button class="btn primary big mt" id="create-btn">🕵️ اعمل روم جديد</button>
       <div class="or">أو</div>
       <input class="field code-input" id="code-in" inputmode="numeric" maxlength="4" placeholder="• • • •" value="${esc(code)}">
-      <button class="btn teal big mt" id="join-btn">🚪 ادخل الروم</button>
+      <button class="btn teal big mt" id="join-btn">${DOOR_IN}  ادخل الروم</button>
     </div>
     <div class="card tight center muted small">من 3 لـ 12 لاعب — كل واحد من متصفح موبايله 📱</div>`;
   $('#av-btn').onclick = () => { Snd.play('pick'); S.avatar = AVATARS[(AVATARS.indexOf(S.avatar) + 1) % AVATARS.length]; LS.set('jasoos_av', S.avatar); $('#av-btn').textContent = S.avatar; };
@@ -201,7 +211,7 @@ function renderHome(prefillCode) {
 function render() {
   const st = S.st; if (!st) return;
   updPresence(st);
-  const key = st.phase + '|' + st.round + '|' + (st.phase === 'play' ? (st.yourTurn ? 'me' : 'x') + st.turnInRound : '') + '|' + (st.youVoted ? 'v' : '') + (st.youGuessed ? 'g' : '') + (st.youReady ? 'r' : '') + '|' + (st.phase === 'reveal' ? (st.guessOpen ? 'GO' : 'GD') + (st.gameRound || '') : '');
+  const key = st.phase + '|' + st.round + '|' + (st.phase === 'play' ? (st.yourTurn ? 'me' : 'x') + st.turnInRound : '') + '|' + (st.youVoted ? 'v' : '') + (st.youGuessed ? 'g' : '') + (st.youReady ? 'r' : '') + '|' + (st.phase === 'reveal' ? (st.guessOpen ? 'GO' : 'GD') + (st.gameRound || '') + '|c' + (st.creditCount || 0) : '');
   if (key === S.viewKey) {
     if (st.phase === 'lobby') return renderLobby(st);
     if (st.phase === 'play') return patchPlay(st);
@@ -248,7 +258,7 @@ function renderLobby(st) {
           ${isHost && !p.isHost ? `<button class="kick" data-kick="${p.id}">✕</button>` : ''}
           <div class="av">${p.avatar}</div>
           <div class="nm">${esc(p.name)}${p.id === me.id ? ' (انت)' : ''}</div>
-          <div class="st">${p.left ? 'خرج 🚪' : (p.connected ? 'موجود ✅' : 'اتفصل ⏳')}</div>
+          <div class="st">${p.left ? 'خرج ' + DOOR_OUT : (p.connected ? 'موجود ✅' : 'اتفصل ⏳')}</div>
         </div>`).join('')}
       </div>
       ${st.players.length < 3 ? '<div class="center muted small mt">محتاجين 3 على الأقل 🙂</div>' : ''}
@@ -300,7 +310,7 @@ function renderLobby(st) {
     ${isHost
       ? `<button class="btn primary big" id="start-btn" ${st.players.length >= 3 ? '' : 'disabled'}>🚀 يلا نبدأ</button>`
       : `<div class="card tight center">مستنيين <b>${esc(hostName)}</b> 👑 يبدأ 🚀</div>`}
-    <button class="btn ghost big mt" id="leave-btn">🚪 اخرج من الروم</button>`;
+    <button class="btn ghost big mt" id="leave-btn">${DOOR_OUT}  اخرج من الروم</button>`;
   try { const q = window.qrcode(0, 'M'); q.addData(url); q.make(); let svg = ''; try { svg = q.createSvgTag({ cellSize: 4, margin: 2 }); } catch (e) { svg = q.createSvgTag(4, 2); } $('#qr').innerHTML = svg; } catch (e) { $('#qr').classList.add('hidden'); }
   const copy = txt => { (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('اتنسخ ✅', 'ok')).catch(() => {}); };
   $('#code-copy').onclick = () => copy(st.code); $('#url-copy').onclick = () => copy(url);
@@ -318,7 +328,7 @@ function renderLobby(st) {
     $('#start-btn').onclick = () => { Snd.play('turn'); act('startGame'); };
     $$('.kick').forEach(b => b.onclick = async () => { if (await uiConfirm('تطرده من الروم؟', { emoji: '👋', okLabel: 'اطرده' })) act('kick', { playerId: b.dataset.kick }); });
   }
-  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: DOOR_OUT, okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 /* ===== شاشة اللعب ===== */
@@ -416,7 +426,7 @@ function renderPlay(st) {
     inp.onkeydown = e => { if (e.key === 'Enter') send(); };
     setTimeout(() => inp.focus(), 100);
   }
-  const lb = $('#leave-btn2'); if (lb) lb.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
+  const lb = $('#leave-btn2'); if (lb) lb.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: DOOR_OUT, okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 function patchPlay(st) {
   const w = $('#words');
@@ -479,7 +489,7 @@ function renderVote(st) {
       if (r.ok) Snd.play('ok');
     };
   }
-  const lb = $('#leave-btn2'); if (lb) lb.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
+  const lb = $('#leave-btn2'); if (lb) lb.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: DOOR_OUT, okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 function patchVote(st) { const v = $('#v-n'); if (v) v.textContent = st.votedCount; }
 
@@ -521,7 +531,7 @@ function renderSpyGuess(st) {
       </div>
       ${bottomLeave}`;
   }
-  const lb = $('#leave-btn2'); if (lb) lb.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
+  const lb = $('#leave-btn2'); if (lb) lb.onclick = async () => { if (await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: DOOR_OUT, okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 function patchSpyGuess(st) { const n = $('#sg-n'); if (n) n.textContent = st.spyGuessCount; }
 
@@ -565,7 +575,7 @@ function renderReveal(st) {
     <div class="card"><h3 class="mb">🗳️ تصويت الأبرياء</h3>${(R.voters || []).map(v => `<div class="guess-item ${v.correctCount ? 'correct' : ''}"><span class="who">${v.avatar} ${esc(v.name)}</span><span class="gtext">${v.picked.map(esc).join('، ')} ${v.correctCount ? '✅ +' + v.gained : '❌'}</span></div>`).join('')}</div>
     ${guessBlock}
     ${!guessing ? `<div class="card"><h3 class="mb">📝 الكلمات اللي اتقالت</h3>${(R.words || []).map(w => `<div class="guess-item" style="${w.wasSpy ? 'border-color:var(--coral)' : ''}"><span class="who">${w.avatar} ${esc(w.name)}${w.wasSpy ? ' 🕵️' : ''}</span><span class="gtext">${esc(w.word)}</span></div>`).join('')}</div>
-    <div class="card"><h3 class="mb">📊 النقط ${st.isLastRound ? '' : '(تراكمية)'}</h3>${board.map((p, i) => `<div class="rank-row ${p.id === st.you.id ? 'me' : ''}"><span class="pos">${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' 🚪' : ''}</span><span class="sc">${p.score}</span></div>`).join('')}</div>
+    <div class="card"><h3 class="mb">📊 النقط ${st.isLastRound ? '' : '(تراكمية)'}</h3>${board.map((p, i) => `<div class="rank-row ${p.id === st.you.id ? 'me' : ''}"><span class="pos">${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' ' + DOOR_OUT : ''}</span><span class="sc">${p.score}</span></div>`).join('')}</div>
     <div class="card tight center">
     ${st.canCredit ? creditCard(st) : ''}
       ${st.youReady ? '<div style="font-weight:900;color:var(--brass-hi)">تمام ✅ مستنيين الباقي</div>' : `<button class="btn primary big" id="ready-btn">${st.isLastRound ? '🏁 النتيجة النهائية' : '⬅️ الجولة الجاية'}</button>`}
@@ -601,7 +611,7 @@ function renderGameover(st) {
     <div class="bunting teal"></div>
     <div class="card center"><h2 class="display" style="font-size:30px">🏆 نتيجة السهرة</h2><div class="podium">${pod(1)}${pod(0)}${pod(2)}</div></div>
     <div class="card"><h3 class="mb">🏅 الجوايز</h3>${R.awards.map(a => `<div class="award"><span class="aic">${a.icon}</span><div><div class="at">${esc(a.title)}: ${esc(a.who)}</div><div class="ad">${esc(a.detail)}</div></div></div>`).join('')}</div>
-    <div class="card"><h3 class="mb">📊 الترتيب</h3>${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">🚪</span>' : ''}</span><span class="muted small">(${p.caught} قفشه · ${p.escaped} فلت)</span><span class="sc">${p.score}</span></div>`).join('')}</div>
+    <div class="card"><h3 class="mb">📊 الترتيب</h3>${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">${DOOR_OUT}</span>' : ''}</span><span class="muted small">(${p.caught} قفشه · ${p.escaped} فلت)</span><span class="sc">${p.score}</span></div>`).join('')}</div>
     ${me.isHost ? '<button class="btn primary big" id="again-btn">🔄 نلعب تاني</button>' : `<div class="card tight center">جولة تانية؟ <b>${esc(hostP.name || '')}</b> 👑</div>`}
     <button class="btn ghost big mt" id="leave-btn">🏠 خروج</button>`;
   const ab = $('#again-btn'); if (ab) ab.onclick = () => act('playAgain');
@@ -619,35 +629,16 @@ const JASOOS_STEPS = [
   ['🔁', 'كذا جولة والنقط تتجمع', 'اللعبة <span class="hl">كذا جولة</span> — كل جولة جاسوس عشوائي جديد وكلمة جديدة، والنقط بتتراكم لحد آخر الجيم، وبعدين تحليل النتايج والجوايز.'],
   ['🕵️', 'عدد الجواسيس', '3 لاعيبة → جاسوس واحد. من 4 لـ 6 → لحد 2. من 7 وفوق → لحد 3. ولو الهوست اختار <span class="hl">عشوائي</span>، محدش يعرف كانوا كام غير في النهاية 🤫'],
   ['⚙️', 'الهوست بيحدد', 'الكاتيجوريز، <span class="hl">كام كلمة يكتب كل لاعب (2–6)</span>، <span class="hl">عدد الجولات في الجيم (1–10)</span>، عدد الجواسيس (يحدده ولا عشوائي سري)، ووقت الدور.'],
-  ['🚪', 'حاجات مهمة', 'الكلمات متتكررش في الروم أبدًا. ولو خرجت سكورك بيفضل محسوب. وفوق شريط بيوضّح لو حد خرج من اللعبة وهو بيلعب ❗'],
+  [DOOR_OUT, 'حاجات مهمة', 'الكلمات متتكررش في الروم أبدًا. ولو خرجت سكورك بيفضل محسوب. وفوق شريط بيوضّح لو حد خرج من اللعبة وهو بيلعب ❗'],
 ];
 function showHelp() {
   const ov = document.createElement('div'); ov.className = 'help-ov';
   ov.innerHTML = `<div class="help-card">
     <div class="help-hero"><img src="/img/jasoos.png" alt=""><h2>الجاسوس</h2><div class="sub">مين فيكم مش عارف الكلمة؟ 🕵️</div></div>
     <div class="help-body">${JASOOS_STEPS.map(([e, t, d]) => `<div class="help-step"><div class="help-num">${e}</div><div><h4>${t}</h4><p>${d}</p></div></div>`).join('')}</div>
-    <div class="help-foot"><div class="safe-row">
-      <span>مسافة فوق شريط الإشعارات</span>
-      <span class="safe-ctl">
-        <button type="button" id="safe-minus" aria-label="أقل">−</button>
-        <b id="safe-val">0</b>
-        <button type="button" id="safe-plus" aria-label="أكتر">+</button>
-      </span>
-    </div>
-    <div class="safe-hint">لو محتوى اللعبة داخل تحت الساعة والبطارية، زوّدها. ولو في فراغ زيادة فوق، قلّلها.</div>
-    <label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label><button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button></div>
+    <div class="help-foot"><label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label><button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button></div>
   </div>`;
   document.body.appendChild(ov);
-  /* ظبط المسافة فوق — بتتحفظ على الجهاز ده لوحده */
-  (function () {
-    if (!window.SafeTop) return;
-    const vEl = $('#safe-val'); if (!vEl) return;
-    const show = () => { vEl.textContent = SafeTop.value + (SafeTop.isCustom() ? '' : '*'); };
-    show();
-    const bump = (d) => { SafeTop.set(SafeTop.value + d); show(); };
-    $('#safe-minus').onclick = (e) => { e.stopPropagation(); bump(-4); };
-    $('#safe-plus').onclick = (e) => { e.stopPropagation(); bump(4); };
-  })();
   const close = () => { if ($('#help-off') && $('#help-off').checked) LS.set('lamma_help_off_jasoos', true); ov.remove(); };
   $('#help-ok').onclick = close; ov.onclick = e => { if (e.target === ov) close(); };
 }

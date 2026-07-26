@@ -1,3 +1,13 @@
+
+/* أيقونات الباب — باب مفتوح وسهم بيوضّح داخل ولا خارج */
+const DOOR_OUT = '<svg class="ico-door" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M18.5 12H10m0 0 3-3m-3 3 3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<circle cx="8.4" cy="12" r=".95" fill="currentColor"/></svg>';
+const DOOR_IN = '<svg class="ico-door" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M10 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M5.5 12H14m0 0-3-3m3 3-3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<circle cx="16.4" cy="12" r=".95" fill="currentColor"/></svg>';
 /* تحدي الشلة — واجهة اللعبة */
 'use strict';
 
@@ -174,7 +184,7 @@ function header(sub) {
     <button class="btn sm ghost" id="home-btn">🏠</button>
     <button class="btn sm ghost" id="mute-btn">${Snd.muted ? '🔇' : '🔊'}</button>
   </div>
-  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">🚪</button>' : ''}
+  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">${DOOR_OUT}</button>' : ''}
   <div id="presence-bar" class="presence-bar hidden"></div>`;
 }
 function bindHeader() {}
@@ -189,7 +199,7 @@ document.addEventListener('click', async (e) => {
   }
   else if (t.id === 'mute-btn') { Snd.toggle(); t.textContent = Snd.muted ? '🔇' : '🔊'; }
   else if (t.id === 'leave-fab') {
-    if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب في النتيجة النهائية', { emoji: '🚪', title: 'خروج من الروم', okLabel: 'اخرج', cancelLabel: 'استنى' })) return;
+    if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب في النتيجة النهائية', { emoji: DOOR_OUT, title: 'خروج من الروم', okLabel: 'اخرج', cancelLabel: 'استنى' })) return;
     await act('leave'); leaveLocal();
   }
 });
@@ -206,7 +216,7 @@ function updPresence(st) {
   if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); return; }
   el.innerHTML = st.players.map(p => {
     const cls = p.left ? 'gone' : (!p.connected ? 'off' : (p.away ? 'away' : 'here'));
-    const badge = p.left ? '🚪' : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
+    const badge = p.left ? DOOR_OUT : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
     return `<span class="pv ${cls}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
   }).join('');
   /* تحذير الغشاش: مين خارج من اللعبة دلوقتي */
@@ -236,7 +246,7 @@ function renderHome(prefillCode) {
       <button class="btn primary big mt" id="create-btn">💡 اعمل روم جديد</button>
       <div class="or">أو</div>
       <input class="field code-input" id="code-in" inputmode="numeric" maxlength="4" placeholder="• • • •" value="${esc(code)}">
-      <button class="btn teal big mt" id="join-btn">🚪 ادخل الروم</button>
+      <button class="btn teal big mt" id="join-btn">${DOOR_IN}  ادخل الروم</button>
     </div>
     <div class="card tight center muted small">
       اللعبة شغالة من المتصفح على أي موبايل 📱 — من غير ما حد ينزّل حاجة.
@@ -326,7 +336,7 @@ function renderLobby(st) {
           ${isHost && !p.isHost ? `<button class="kick" data-kick="${p.id}">✕</button>` : ''}
           <div class="av">${p.avatar}</div>
           <div class="nm">${esc(p.name)}${p.id === me.id ? ' (انت)' : ''}</div>
-          <div class="st">${p.left ? 'خرج 🚪' : (p.connected ? 'موجود ✅' : 'اتفصل ⏳')}</div>
+          <div class="st">${p.left ? 'خرج ' + DOOR_OUT : (p.connected ? 'موجود ✅' : 'اتفصل ⏳')}</div>
         </div>`).join('')}
       </div>
     </div>
@@ -366,7 +376,7 @@ function renderLobby(st) {
       ? `<button class="btn primary big" id="start-btn" ${st.players.length >= 2 && !tooMany && st.settings.cats.length >= 1 ? '' : 'disabled'}>🚀 يلا نبدأ تجهيز الأسئلة</button>
          ${st.players.length < 2 ? '<div class="center muted small mt">مستنيين حد تاني يدخل عشان نبدأ</div>' : ''}`
       : `<div class="card tight center">مستنيين <b>${esc(hostName)}</b> 👑 يدوس بدء 🚀</div>`}
-    <button class="btn ghost big mt" id="leave-btn">🚪 اخرج من الروم</button>`;
+    <button class="btn ghost big mt" id="leave-btn">${DOOR_OUT}  اخرج من الروم</button>`;
   bindHeader();
 
   try {
@@ -404,7 +414,7 @@ function renderLobby(st) {
     $('#start-btn').onclick = () => { Snd.play('q'); act('startWriting'); };
     $$('.kick').forEach(b => b.onclick = async () => { if (await uiConfirm('متأكد عايز تطرده من الروم؟', { emoji: '👋', title: 'طرد لاعب', okLabel: 'اطرده' })) act('kick', { playerId: b.dataset.kick }); });
   }
-  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: DOOR_OUT, okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 /* ======================= مرحلة تجهيز الأسئلة ======================= */
@@ -497,7 +507,7 @@ function renderWriting(st) {
           </div>`).join('')}
       </div>`).join('')}
     <button class="btn primary big" id="done-btn" ${done === total ? '' : 'disabled'}>${done === total ? 'خلصت ✅ سلّم أسئلتك' : `كمّل الأسئلة الأول (${done}/${total})`}</button>
-    <button class="btn ghost big mt" id="leave-btn">🚪 اخرج من الروم</button>`;
+    <button class="btn ghost big mt" id="leave-btn">${DOOR_OUT}  اخرج من الروم</button>`;
   bindHeader();
   $$('[data-bank]').forEach(b => b.onclick = () => drawInto(parseInt(b.dataset.bank, 10)));
   $$('[data-self]').forEach(b => b.onclick = () => openSelf(st, parseInt(b.dataset.self, 10), null));
@@ -517,7 +527,7 @@ function renderWriting(st) {
     openSelf(S.st, i, null);
   });
   $('#done-btn').onclick = submitAll;
-  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: '🚪', okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
+  $('#leave-btn').onclick = async () => { if (await uiConfirm('تخرج من الروم؟', { emoji: DOOR_OUT, okLabel: 'اخرج' })) { await act('leave'); leaveLocal(); } };
 }
 
 function patchWritingLive(st) {
@@ -619,7 +629,7 @@ function renderWaiting(st) {
       <div class="waiting-list">
         ${st.players.map(p => `
           <div class="wrow"><span>${p.avatar}</span><span>${esc(p.name)}${p.id === me.id ? ' (انت)' : ''}</span>
-            ${p.left ? '<span class="wr">خرج 🚪</span>' : (p.ready ? '<span class="ok">جاهز ✅</span>' : (p.connected ? '<span class="wr">بيكتب ✍️</span>' : '<span class="wr">اتفصل ⏳</span>'))}
+            ${p.left ? '<span class="wr">خرج ${DOOR_OUT}</span>' : (p.ready ? '<span class="ok">جاهز ✅</span>' : (p.connected ? '<span class="wr">بيكتب ✍️</span>' : '<span class="wr">اتفصل ⏳</span>'))}
           </div>`).join('')}
       </div>
     </div>
@@ -805,7 +815,7 @@ function renderResults(st) {
     </div>
     <div class="card">
       <h3 class="mb">📊 الترتيب</h3>
-      ${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">🚪 خرج</span>' : ''}</span><span class="muted small">(${p.correct}/${p.eligible} صح)</span><span class="sc">${p.score}</span></div>`).join('')}
+      ${R.ranking.map(p => `<div class="rank-row ${p.id === me.id ? 'me' : ''}"><span class="pos">#${p.rank}</span><span>${p.avatar}</span><span>${esc(p.name)}${p.left ? ' <span class="muted small">${DOOR_OUT} خرج</span>' : ''}</span><span class="muted small">(${p.correct}/${p.eligible} صح)</span><span class="sc">${p.score}</span></div>`).join('')}
     </div>
     <div class="card">
       <h3 class="mb">🔍 مين شاطر في مين؟</h3>
@@ -907,31 +917,11 @@ function showHelp() {
             <div><h4>${t}</h4><p>${d}</p></div>
           </div>`).join('')}
       </div>
-      <div class="help-foot"><div class="safe-row">
-      <span>مسافة فوق شريط الإشعارات</span>
-      <span class="safe-ctl">
-        <button type="button" id="safe-minus" aria-label="أقل">−</button>
-        <b id="safe-val">0</b>
-        <button type="button" id="safe-plus" aria-label="أكتر">+</button>
-      </span>
-    </div>
-    <div class="safe-hint">لو محتوى اللعبة داخل تحت الساعة والبطارية، زوّدها. ولو في فراغ زيادة فوق، قلّلها.</div>
-    
-        <label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label>
+      <div class="help-foot"><label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label>
         <button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button>
       </div>
     </div>`;
   document.body.appendChild(ov);
-  /* ظبط المسافة فوق — بتتحفظ على الجهاز ده لوحده */
-  (function () {
-    if (!window.SafeTop) return;
-    const vEl = $('#safe-val'); if (!vEl) return;
-    const show = () => { vEl.textContent = SafeTop.value + (SafeTop.isCustom() ? '' : '*'); };
-    show();
-    const bump = (d) => { SafeTop.set(SafeTop.value + d); show(); };
-    $('#safe-minus').onclick = (e) => { e.stopPropagation(); bump(-4); };
-    $('#safe-plus').onclick = (e) => { e.stopPropagation(); bump(4); };
-  })();
   const close = () => { if ($('#help-off') && $('#help-off').checked) LS.set('lamma_help_off_tahadi', true); ov.remove(); };
   $('#help-ok').onclick = close;
   ov.onclick = e => { if (e.target === ov) close(); };
