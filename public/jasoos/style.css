@@ -350,3 +350,13 @@ details.review .rv-body{padding:0 12px 12px;border-top:2px dashed var(--line)}
 /* عدّادات فوق */
 .counters{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
 .counters .chip{font-weight:800}
+
+/* تحذير الغشاش — تحت شريط الحضور */
+.cheat-alert{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:109;
+  background:#2a0f14ee;border:2px solid var(--coral);border-radius:14px;padding:6px 12px;
+  box-shadow:0 6px 18px #000a;max-width:94vw;text-align:center;animation:cheatPop .25s ease-out}
+.cheat-alert .ca-top{font-weight:900;font-size:14px;color:var(--coral);letter-spacing:.3px}
+.cheat-alert .ca-names{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:center;margin-top:2px}
+.cheat-alert .ca-one{font-size:11px;color:#ffd9d2}
+.cheat-alert .ca-one b{font-weight:700;opacity:.85}
+@keyframes cheatPop{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}

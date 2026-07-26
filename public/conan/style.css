@@ -419,3 +419,21 @@ details.review .rv-body{padding:0 12px 12px;border-top:2px dashed var(--line)}
 .cr-sec{font-weight:900;color:var(--ink);margin:8px 0 6px;font-size:15px}
 .log-item{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:6px;
   display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+
+/* تحذير الغشاش — تحت شريط الحضور */
+.cheat-alert{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:109;
+  background:#2a0f14ee;border:2px solid var(--coral);border-radius:14px;padding:6px 12px;
+  box-shadow:0 6px 18px #000a;max-width:94vw;text-align:center;animation:cheatPop .25s ease-out}
+.cheat-alert .ca-top{font-weight:900;font-size:14px;color:var(--coral);letter-spacing:.3px}
+.cheat-alert .ca-names{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:center;margin-top:2px}
+.cheat-alert .ca-one{font-size:11px;color:#ffd9d2}
+.cheat-alert .ca-one b{font-weight:700;opacity:.85}
+@keyframes cheatPop{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* منطقة التسليم — مفصولة تمامًا عن باقي الشاشة عشان محدش يتلخبط */
+.submit-zone{margin-top:18px;padding-top:14px;border-top:2px dashed #33456b;text-align:center}
+.submit-zone .sz-hint{font-size:12px;color:var(--muted);margin-bottom:8px}
+.submit-zone .btn.danger{width:100%}
+.btn.danger{background:linear-gradient(180deg,#e3574a,#b8372c);border-color:#8d2a21;color:#fff}
+.btn.danger:active{filter:brightness(.92)}
+.row.hidden,.btn.hidden{display:none}

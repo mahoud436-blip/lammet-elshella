@@ -135,12 +135,20 @@ document.addEventListener('click', async (e) => {
 function updPresence(st) {
   const el = $('#presence-bar'); if (!el) return;
   const show = st && (st.phase === 'play' || st.phase === 'pick');
-  el.classList.toggle('hidden', !show); if (!show) return;
+  el.classList.toggle('hidden', !show);
+  if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); return; }
   el.innerHTML = st.players.map(p => {
     const cls = p.left ? 'gone' : (!p.connected ? 'off' : (p.away ? 'away' : 'here'));
     const badge = p.left ? '🚪' : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
     return `<span class="pv ${cls}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
   }).join('');
+  /* تحذير الغشاش: مين خارج من اللعبة دلوقتي */
+  const away = st.players.filter(p => p.away && !p.left && p.connected);
+  let cap = $('#cheat-alert');
+  if (!away.length) { if (cap) cap.remove(); return; }
+  if (!cap) { cap = document.createElement('div'); cap.id = 'cheat-alert'; cap.className = 'cheat-alert'; el.insertAdjacentElement('afterend', cap); }
+  cap.innerHTML = `<div class="ca-top">🚨 امسك غشاش!</div>
+    <div class="ca-names">${away.map(p => `<span class="ca-one">${p.avatar} ${esc(p.name)} <b>بيدوّر برّه 🔍</b></span>`).join('')}</div>`;
 }
 /* شاشة التوقف المؤقت (لو حد قطع النت) — طبقة فوق الكل، مستقلة عن الشاشة الأساسية */
 function updPaused(st) {
@@ -188,7 +196,7 @@ function renderHome(prefillCode) {
 function sigOf(st) {
   const P = st.phase;
   if (P === 'lobby') return 'L|' + st.players.map(p => p.id + (p.connected ? 1 : 0) + (p.isHost ? 1 : 0)).join(',') + '|' + JSON.stringify(st.settings);
-  if (P === 'pick') return 'K|' + st.caseNo + '|' + (st.youAreAccused ? 'a' : 'd') + '|' + (st.pickMode || '') + '|' + (st.allowCustomWord ? 1 : 0) + '|' + (st.secret ? 1 : 0);
+  if (P === 'pick') return 'K|' + st.caseNo + '|' + (st.youAreAccused ? 'a' : 'd') + '|' + (st.pickMode || '') + '|' + (st.allowCustomWord ? 1 : 0) + '|' + (st.secret || '') + '|' + (st.swapsLeft == null ? '' : st.swapsLeft);
   if (P === 'play') {
     let s = 'P|' + st.caseNo + '|' + st.round + '|' + st.sub + '|' + (st.youAreAccused ? 'a' : 'd') + '|' + (st.youSubmitted ? 'S' : '');
     if (st.sub === 'ask' || st.sub === 'answer') s += '|' + (st.yourTurnToAsk ? 'me' : 'x') + (st.curQ ? (st.curQ.answer ? 'QA' : 'Q') : 'NQ');
@@ -395,6 +403,7 @@ function buildPick(st) {
         </div>
         <button class="btn teal big mt" id="pick-own">✍️ استخدم كلمتي</button>
       ` : ''}
+      ${st.secret && st.pickMode === 'bank' && st.swapsLeft > 0 ? `<button class="btn ghost big" id="swap-btn">🔀 الكلمة صعبة، بدّلها (فاضل ${st.swapsLeft})</button>` : ''}
       ${st.secret ? '<button class="btn primary big mt" id="start-play">🔎 يلا يسألوني</button>' : ''}
     </div>
     ${LEAVE_BTN}${hostForce(st)}`;
@@ -402,6 +411,7 @@ function buildPick(st) {
   let chosenCat = (st.catOptions && st.catOptions[0]) ? st.catOptions[0].id : null;
   $$('.cat-pick').forEach(el => el.onclick = () => { $$('.cat-pick').forEach(x => x.classList.remove('on')); el.classList.add('on'); chosenCat = el.dataset.cat; });
   const po = $('#pick-own'); if (po) lockBtn(po, async () => { const w = $('#own-word').value.trim(); if (w.length < 2) return toast('اكتب كلمة صح', 'err'); await act('pickCustom', { word: w, cat: chosenCat }); });
+  const sw = $('#swap-btn'); if (sw) lockBtn(sw, () => { Snd.play('pick'); return act('swapWord'); });
   const sp = $('#start-play'); if (sp) lockBtn(sp, () => { Snd.play('turn'); return act('startPlay'); });
   bindLeave2();
 }
@@ -454,14 +464,35 @@ function buildPlay(st) {
                 <div class="center" style="font-weight:900;font-size:18px">عرفتها؟ 🤔</div>
                 <div class="center muted small mb">لو سلّمت دلوقتي وطلعت صح هتاخد <b style="color:var(--brass-hi)">${st.tier}</b>${st.nextTier ? ` — ولو كمّلت الجولة الجاية تبقى <b>${st.nextTier}</b>` : ''}</div>
                 ${st.mustSubmit ? '<div class="penalty-note">دي آخر جولة — لازم تسلّم إجابتك دلوقتي!</div>' : ''}
-                <div class="row mt">
-                  <input class="field grow" id="sub-in" maxlength="60" placeholder="اكتب إجابتك...">
-                  <button class="btn primary" id="sub-btn">🔒 سلّم</button>
-                </div>
-                ${st.mustSubmit ? '' : '<button class="btn ghost big mt" id="keep-btn">🔎 لأ، هكمّل تحقيق</button>'}
+                ${st.mustSubmit ? `
+                  <div class="row mt">
+                    <input class="field grow" id="sub-in" maxlength="60" placeholder="اكتب إجابتك...">
+                    <button class="btn primary" id="sub-btn">🔒 سلّم</button>
+                  </div>`
+                : `
+                  <button class="btn primary big mt" id="keep-btn">🔎 لأ، هكمّل تحقيق</button>
+                  <div class="submit-zone">
+                    <div class="sz-hint">خلاص عرفت الكلمة؟</div>
+                    <button class="btn danger big" id="open-sub">🔒 سلّم دلوقتي</button>
+                    <div class="row mt hidden" id="sub-row">
+                      <input class="field grow" id="sub-in" maxlength="60" placeholder="اكتب إجابتك...">
+                      <button class="btn primary" id="sub-btn">ابعت</button>
+                    </div>
+                  </div>`}
                 <div class="center muted small mt">قرروا <b id="d-n">${st.decidedCount}</b> من ${st.decideTotal}</div>
               </div>`))}
       ${LEAVE_BTN}${hostForce(st)}`;
+    const ob = $('#open-sub');
+    if (ob) ob.onclick = async () => {
+      const okGo = await uiConfirm('بعد ما تسلّم إجابتك بتتقفل ومش هتقدر تغيّرها ولا تسأل تاني — هتستنى باقي المحققين لحد ما يخلّصوا.', { emoji: '🔒', title: 'متأكد إنك هتسلّم؟', okLabel: 'أيوه، هسلّم', cancelLabel: 'لأ، هكمّل' });
+      if (!okGo) return;
+      Snd.play('pick');
+      ob.classList.add('hidden');
+      const row = $('#sub-row'); if (row) row.classList.remove('hidden');
+      const hint = $('.sz-hint'); if (hint) hint.textContent = 'اكتب الكلمة اللي وصلت لها 👇';
+      const kb2 = $('#keep-btn'); if (kb2) kb2.classList.add('hidden');
+      const inp = $('#sub-in'); if (inp) inp.focus();
+    };
     const sb = $('#sub-btn');
     if (sb) {
       const send = async () => { const v = $('#sub-in').value.trim(); if (!v) return toast('اكتب إجابتك', 'err'); const r = await act('submitAnswer', { text: v }); if (r.ok) Snd.play('ok'); };

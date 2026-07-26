@@ -138,12 +138,20 @@ document.addEventListener('click', async (e) => {
 function updPresence(st) {
   const el = $('#presence-bar'); if (!el) return;
   const show = st && (st.phase === 'clue' || st.phase === 'reveal');
-  el.classList.toggle('hidden', !show); if (!show) return;
+  el.classList.toggle('hidden', !show);
+  if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); return; }
   el.innerHTML = st.players.map(p => {
     const cls = p.left ? 'gone' : (!p.connected ? 'off' : (p.away ? 'away' : 'here'));
     const badge = p.left ? '🚪' : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
     return `<span class="pv ${cls}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
   }).join('');
+  /* تحذير الغشاش: مين خارج من اللعبة دلوقتي */
+  const away = st.players.filter(p => p.away && !p.left && p.connected);
+  let cap = $('#cheat-alert');
+  if (!away.length) { if (cap) cap.remove(); return; }
+  if (!cap) { cap = document.createElement('div'); cap.id = 'cheat-alert'; cap.className = 'cheat-alert'; el.insertAdjacentElement('afterend', cap); }
+  cap.innerHTML = `<div class="ca-top">🚨 امسك غشاش!</div>
+    <div class="ca-names">${away.map(p => `<span class="ca-one">${p.avatar} ${esc(p.name)} <b>بيدوّر برّه 🔍</b></span>`).join('')}</div>`;
 }
 
 function renderHome(prefillCode) {
