@@ -132,6 +132,29 @@ function distinctive(cat, token) { return (tokenFreq.get(cat + '|' + token) || 0
    ما تتقبلش كإجابة لمدخل تاني مركّب منها */
 const titleSet = new Set(all.map(x => normalize(x.title)));
 
+/* فهرس المقاطع المتّصلة (كلمتين أو أكتر) اللي جوه الأسماء الطويلة —
+   عشان «لوحة المفاتيح» تتقبل لـ«لوحة المفاتيح الرقمية».
+   بنعدّ كل مقطع بيتكرر في كام مدخل: لو في أكتر من واحد يبقى ملخبط ومبيتقبلش
+   («دوري أبطال» بتوصّل لأوروبا وأفريقيا — فمترفض) */
+const phraseFreq = new Map();
+for (const it of all) {
+  const seen = new Set();
+  for (const acc of it.accepts) {
+    const w = acc.split(' ').filter(Boolean);
+    if (w.length < 3) continue;                       /* المقطع لازم يكون أقصر من الاسم */
+    for (let i = 0; i < w.length; i++) {
+      for (let n = 2; n <= w.length - i - 1; n++) {
+        const frag = w.slice(i, i + n).join(' ');
+        if (seen.has(frag)) continue;
+        seen.add(frag);
+        const k = it.cat + '|' + frag;
+        phraseFreq.set(k, (phraseFreq.get(k) || 0) + 1);
+      }
+    }
+  }
+}
+function phraseUnique(cat, frag) { return (phraseFreq.get(cat + '|' + frag) || 0) === 1; }
+
 module.exports = {
   cats: () => CATS.map(c => ({ id: c.id, icon: c.icon, name: c.name, count: byCat.get(c.id).length })),
   LEVELS,
@@ -169,7 +192,12 @@ module.exports = {
     for (const acc of item.accepts) {
       if (g === acc) return true;                       // مطابقة تامة
       if (fuzzyEq(g, acc)) return true;                 // غلطة حرف/اتنين
-      if (!single) continue;
+      if (!single) {
+        /* تخمين من كذا كلمة جوه اسم أطول — بشرط إنه يوصّل لمدخل واحد بس */
+        if (acc.includes(' ') && (' ' + acc + ' ').includes(' ' + g + ' ')
+            && !titleSet.has(g) && phraseUnique(item.cat, g)) return true;
+        continue;
+      }
       /* كلمة واحدة جوه اسم مركّب — بس لو الكلمة مميّزة («صلاح» أيوه، «محمد» لأ) */
       /* كلمة واحدة جوه اسم مركّب — بشرطين:
          (1) تكون مميّزة في الكاتيجوري («صلاح» أيوه، «محمد» لأ)

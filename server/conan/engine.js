@@ -6,6 +6,7 @@
 'use strict';
 const crypto = require('crypto');
 const BANK = require('./bank');
+const MAX_SWAPS = 2;   /* المتّهم يقدر يبدّل كلمة البنك مرتين */
 
 /* علّم الكلمة وكل الصيغ التانية منها كمستعملة — عشان نفس الكيان
    («نيمار» / «نيمار جونيور») ما يجيش مرتين في نفس الروم */
@@ -48,7 +49,7 @@ function createRoom() {
                 allowCustomWord: false, qTime: 0, aTime: 0 },
     hostToken: null, players: new Map(), order: [], ghosts: new Map(),
     usedItems: new Set(), plan: [], caseIdx: 0,
-    accused: null, item: null, pickMode: null,
+    accused: null, item: null, pickMode: null, swapsUsed: 0,
     round: 0, askOrder: [], askIdx: 0,
     curQ: null,          // {token, text, at, answer}
     history: [],         // كل الأسئلة والإجابات (للكشف في الآخر بس)
@@ -127,6 +128,7 @@ function viewFor(room, p) {
   }
   if (room.phase === 'pick') {
     st.pickMode = room.pickMode;
+    st.swapsLeft = Math.max(0, MAX_SWAPS - (room.swapsUsed || 0));
     st.catOptions = room.settings.cats.map(c => BANK.catMeta(c));
     st.allowCustomWord = room.settings.allowCustomWord;
   }
@@ -242,7 +244,7 @@ function startCase(room) {
   room.accused = tok;
   acc.stat.accusedTimes++;
   room.round = 0; room.history = []; room.submissions = new Map(); room.decided = new Set();
-  room.penalty = 0; room.curQ = null; room.item = null; room.pickMode = null;
+  room.penalty = 0; room.curQ = null; room.item = null; room.pickMode = null; room.swapsUsed = 0;
   if (!room.settings.allowCustomWord) {
     const it = pickItem(room);
     if (it) { room.item = it; markUsed(room, it); }
@@ -574,6 +576,18 @@ module.exports = {
       if (!it) return R(400, { ok: false, error: 'البنك خلص' });
       room.item = it; markUsed(room, it);
       room.pickMode = 'bank';
+      broadcast(room);
+      return R(200, { ok: true });
+    }
+    if (A === 'swapWord') {
+      if (room.phase !== 'pick') return R(400, { ok: false, error: 'مش وقتها' });
+      if (room.accused !== p.token) return R(403, { ok: false, error: 'المتّهم بس' });
+      if (room.pickMode !== 'bank') return R(400, { ok: false, error: 'التبديل للكلمة اللي من البنك بس' });
+      if ((room.swapsUsed || 0) >= MAX_SWAPS) return R(400, { ok: false, error: 'خلّصت مرات التبديل' });
+      const next = pickItem(room);
+      if (!next) return R(400, { ok: false, error: 'مفيش كلمة تانية' });
+      room.swapsUsed = (room.swapsUsed || 0) + 1;
+      room.item = next; markUsed(room, next);
       broadcast(room);
       return R(200, { ok: true });
     }
