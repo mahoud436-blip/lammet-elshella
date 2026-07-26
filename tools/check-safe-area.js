@@ -12,8 +12,8 @@ function checkPage(label, html, css) {
   console.log('\n[' + label + ']');
   ok(/viewport-fit=cover/.test(html), 'viewport-fit=cover موجود');
   ok(/--safe-top:\s*env\(safe-area-inset-top/.test(css), '--safe-top متعرّفة من env()');
-  const floor = css.match(/--safe-top:\s*max\(env\(safe-area-inset-top,\s*0px\),\s*(\d+)px\)/);
-  ok(!!floor && +floor[1] >= 40, 'حد أدنى للموبايل ≥ 40px', floor ? floor[1] + 'px' : 'مافيش');
+  ok(!/--safe-top:\s*max\(/.test(css), 'مفيش رقم ثابت مفروض على كل الأجهزة');
+  ok(/safe-top\.js/.test(html), 'safe-top.js محمّل — بيقيس القيمة الحقيقية');
   ok(/padding:\s*(calc\([^)]*var\(--safe-top\)|var\(--safe-top\))/.test(css) || /padding-top:[^;]*var\(--safe-top\)/.test(css),
     'الحاوية الرئيسية بتنزّل بمقدار المسافة');
   ok(/body::before[\s\S]{0,200}var\(--safe-top\)/.test(css), 'خلفية صلبة ورا الشريط');
