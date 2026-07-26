@@ -149,7 +149,7 @@ function updPresence(st) {
   const away = st.players.filter(p => p.away && !p.left && p.connected);
   let cap = $('#cheat-alert');
   if (!away.length) { if (cap) cap.remove(); return; }
-  if (!cap) { cap = document.createElement('div'); cap.id = 'cheat-alert'; cap.className = 'cheat-alert'; el.insertAdjacentElement('afterend', cap); }
+  if (!cap) { cap = document.createElement('div'); cap.id = 'cheat-alert'; cap.className = 'cheat-alert'; document.body.appendChild(cap); }
   cap.innerHTML = `<div class="ca-top">🚨 امسك غشاش!</div>
     <div class="ca-names">${away.map(p => `<span class="ca-one">${p.avatar} ${esc(p.name)} <b>بيدوّر برّه 🔍</b></span>`).join('')}</div>`;
 }

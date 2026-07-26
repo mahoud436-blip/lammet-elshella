@@ -352,7 +352,7 @@ details.review .rv-body{padding:0 12px 12px;border-top:2px dashed var(--line)}
 .counters .chip{font-weight:800}
 
 /* تحذير الغشاش — تحت شريط الحضور */
-.cheat-alert{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:109;
+.cheat-alert{position:fixed;top:calc(62px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:109;
   background:#2a0f14ee;border:2px solid var(--coral);border-radius:14px;padding:6px 12px;
   box-shadow:0 6px 18px #000a;max-width:94vw;text-align:center;animation:cheatPop .25s ease-out}
 .cheat-alert .ca-top{font-weight:900;font-size:14px;color:var(--coral);letter-spacing:.3px}
