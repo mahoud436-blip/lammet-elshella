@@ -149,7 +149,12 @@ function viewFor(room, p) {
     }
   }
   if (room.phase === 'reveal') {
-    st.result = room.lastResult;
+    st.result = publicResult(room.lastResult);
+    st.youAreCluer = room.cluer === p.token;
+    /* الملمّح بس هو اللي بيشوف قايمة التصحيح — من غير التوكنات */
+    st.canCredit = st.youAreCluer && !!(room.lastResult.candidates || []).length;
+    if (st.youAreCluer) st.creditList = (room.lastResult.candidates || [])
+      .map(c => ({ id: c.id, name: c.name, avatar: c.avatar, text: c.text, done: (room.lastResult.credited || []).includes(c.token) }));
     st.readyIds = [...room.readyNext].map(t => (room.players.get(t) || {}).id).filter(Boolean);
     st.youReady = room.readyNext.has(p.token);
     st.isLastRound = room.roundIdx + 1 >= room.plan.length;
@@ -157,6 +162,15 @@ function viewFor(room, p) {
   if (room.phase === 'gameover') st.results = room.results;
   return st;
 }
+/* نسخة آمنة من النتيجة: من غير توكنات ولا قايمة التصحيح الخام */
+function publicResult(res) {
+  if (!res) return res;
+  const out = Object.assign({}, res);
+  delete out.candidates; delete out.credited;
+  if (Array.isArray(out.answers)) out.answers = out.answers.map(r => { const c = Object.assign({}, r); delete c.token; return c; });
+  return out;
+}
+
 function broadcast(room) { room.lastActivity = now(); for (const p of allPlayers(room)) if (p.res) sseSend(p.res, viewFor(room, p)); }
 
 /* ============ سير اللعبة ============ */
@@ -276,6 +290,16 @@ function endRound(room, winnersTokens, finalEntries) {
     hintsUsed: room.cluesGiven,
     hints: breakdown,
   };
+  /* المرشحين للتصحيح اليدوي: أي حد خمّن ومتحسبتلوش (آخر تخمين ليه) */
+  {
+    const g = new Map();
+    for (const h of room.hintHistory) for (const e of h.guesses) if (!e.correct && e.token !== room.cluer) g.set(e.token, e.text);
+    if (finalEntries) for (const e of finalEntries) if (!e.correct && e.token !== room.cluer) g.set(e.token, e.text);
+    room.lastResult.candidates = [...g.entries()].map(([token, text]) => {
+      const w = nameOf(room, token); return { token, id: (room.players.get(token) || {}).id, name: w.name, avatar: w.avatar, text };
+    });
+    room.lastResult.credited = [];
+  }
   room.roundHistory.push({ round: room.roundIdx + 1, ...room.lastResult });
   room.readyNext = new Set();
   room.phase = 'reveal';
@@ -524,6 +548,30 @@ module.exports = {
       room.passesUsed++;
       const next = pickItem(room);
       if (next) { room.item = next; markUsed(room, next); }
+      broadcast(room);
+      return R(200, { ok: true });
+    }
+    if (A === 'creditGuess') {
+      if (room.phase !== 'reveal') return R(400, { ok: false, error: 'مش وقتها' });
+      if (room.cluer !== p.token) return R(403, { ok: false, error: 'الملمّح بس هو اللي يحسبها' });
+      const res = room.lastResult || {};
+      const cand = (res.candidates || []).find(c => c.id === String(body.target || ''));
+      if (!cand) return R(400, { ok: false, error: 'اللاعب ده مش في القايمة' });
+      res.credited = res.credited || [];
+      if (res.credited.includes(cand.token)) return R(400, { ok: false, error: 'محسوبة له خلاص' });
+      const w = room.players.get(cand.token);
+      if (!w) return R(400, { ok: false, error: 'اللاعب مش موجود' });
+      const pts = room.cluesGiven > 0 ? tierPoints(room.cluesGiven) : 0;
+      w.score += pts; w.stat.solved++;
+      res.credited.push(cand.token);
+      /* أول تصحيح في جولة كانت محسوبة فاشلة → الملمّح ياخد نصيبه كمان */
+      if (!res.solved) {
+        const cl = room.players.get(room.cluer);
+        const cpts = room.cluesGiven > 0 ? cluerPoints(room.cluesGiven) : 0;
+        if (cl) { cl.score += cpts; cl.stat.cluedSuccess++; }
+        res.solved = true; res.points = pts; res.cluerPoints = cpts;
+      }
+      res.winners = (res.winners || []).concat([{ name: cand.name, avatar: cand.avatar, manual: true }]);
       broadcast(room);
       return R(200, { ok: true });
     }

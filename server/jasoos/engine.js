@@ -154,7 +154,13 @@ function viewFor(room, p) {
     st.youGuessed = room.spyGuesses.has(p.token);
     // الجاسوس اللي لسه ما خمّنش مينفعش يشوف الكلمة قبل ما يبعت تخمينه
     const hideSecret = st.guessOpen && st.youAreSpy && !st.youGuessed;
-    st.result = (hideSecret && room.lastResult) ? Object.assign({}, room.lastResult, { secret: null }) : room.lastResult;
+    st.result = publicResult(hideSecret && room.lastResult ? Object.assign({}, room.lastResult, { secret: null }) : room.lastResult);
+    /* الهوست بس — وبعد ما تخمينات الجواسيس تتعرض */
+    const R2 = room.lastResult;
+    const canSee = isHost(room, p) && R2 && R2.guessDone && !hideSecret;
+    st.canCredit = !!(canSee && (R2.candidates || []).length);
+    if (canSee) st.creditList = (R2.candidates || [])
+      .map(c => ({ id: c.id, name: c.name, avatar: c.avatar, text: c.text, done: (R2.credited || []).includes(c.token) }));
     st.spyGuessCount = [...room.spies].filter(t => { const q = room.players.get(t); return q && q.connected && room.spyGuesses.has(t); }).length;
     st.spyTotal = [...room.spies].filter(t => { const q = room.players.get(t); return q && q.connected; }).length;
     st.readyIds = [...room.readyNext].map(t => (room.players.get(t) || {}).id).filter(Boolean);
@@ -164,6 +170,15 @@ function viewFor(room, p) {
   if (room.phase === 'gameover') st.results = room.results;
   return st;
 }
+/* نسخة آمنة من النتيجة: من غير توكنات ولا قايمة التصحيح الخام */
+function publicResult(res) {
+  if (!res) return res;
+  const out = Object.assign({}, res);
+  delete out.candidates; delete out.credited;
+  if (Array.isArray(out.answers)) out.answers = out.answers.map(r => { const c = Object.assign({}, r); delete c.token; return c; });
+  return out;
+}
+
 function broadcast(room) { room.lastActivity = now(); for (const p of allPlayers(room)) if (p.res) sseSend(p.res, viewFor(room, p)); }
 
 /* ============ سير اللعبة ============ */
@@ -337,6 +352,14 @@ function finalizeGuess(room) {
     const row = room.lastResult.spies[i];
     if (row) { row.guess = guess; row.guessedRight = guessedRight; row.wordPoints = wordPts; row.total = row.escapePoints + wordPts; }
   }
+  /* المرشحين للتصحيح اليدوي: جاسوس خمّن الكلمة واتحسبت غلط */
+  room.lastResult.candidates = spyList.map((tok, i) => {
+    const row = room.lastResult.spies[i];
+    if (!row || !row.guess || row.guessedRight) return null;
+    const w = nameOf(room, tok);
+    return { token: tok, id: (room.players.get(tok) || {}).id, name: w.name, avatar: w.avatar, text: row.guess, idx: i };
+  }).filter(Boolean);
+  room.lastResult.credited = [];
   room.guessOpen = false;
   room.lastResult.guessDone = true;
   room.roundResults = room.roundResults || [];
@@ -561,6 +584,25 @@ module.exports = {
       room.spyGuesses.set(p.token, g);
       broadcast(room);
       maybeCloseGuess(room);
+      return R(200, { ok: true });
+    }
+    if (A === 'creditGuess') {
+      if (room.phase !== 'reveal') return R(400, { ok: false, error: 'مش وقتها' });
+      if (!isHost(room, p)) return R(403, { ok: false, error: 'الهوست بس هو اللي يحسبها' });
+      const res = room.lastResult || {};
+      if (!res.guessDone) return R(400, { ok: false, error: 'استنى التخمينات تخلص' });
+      const cand = (res.candidates || []).find(c => c.id === String(b.target || ''));
+      if (!cand) return R(400, { ok: false, error: 'اللاعب ده مش في القايمة' });
+      res.credited = res.credited || [];
+      if (res.credited.includes(cand.token)) return R(400, { ok: false, error: 'محسوبة له خلاص' });
+      const sp = room.players.get(cand.token);
+      if (!sp) return R(400, { ok: false, error: 'اللاعب مش موجود' });
+      const pts = 100;
+      sp.score += pts; sp.stat.wordsGuessed++;
+      res.credited.push(cand.token);
+      const row = (res.spies || [])[cand.idx];
+      if (row) { row.guessedRight = true; row.wordPoints = pts; row.total = (row.escapePoints || 0) + pts; row.manual = true; }
+      broadcast(room);
       return R(200, { ok: true });
     }
     if (A === 'readyNext') {

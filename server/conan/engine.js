@@ -162,7 +162,12 @@ function viewFor(room, p) {
     }
   }
   if (room.phase === 'caseEnd') {
-    st.result = room.lastResult;
+    st.result = publicResult(room.lastResult);
+    /* المتّهم بس هو اللي بيشوف قايمة التصحيح */
+    const mine = room.accused === p.token;
+    st.canCredit = mine && !!(room.lastResult.candidates || []).length;
+    if (mine) st.creditList = (room.lastResult.candidates || [])
+      .map(c => ({ id: c.id, name: c.name, avatar: c.avatar, text: c.text, done: (room.lastResult.credited || []).includes(c.token) }));
     st.caseEnd = { isLast: room.caseIdx + 1 >= room.plan.length };
     st.readyIds = [...room.readyNext].map(t => (room.players.get(t) || {}).id).filter(Boolean);
     st.youReady = room.readyNext.has(p.token);
@@ -171,6 +176,15 @@ function viewFor(room, p) {
   if (room.phase === 'gameover') st.results = room.results;
   return st;
 }
+/* نسخة آمنة من النتيجة: من غير توكنات ولا قايمة التصحيح الخام */
+function publicResult(res) {
+  if (!res) return res;
+  const out = Object.assign({}, res);
+  delete out.candidates; delete out.credited;
+  if (Array.isArray(out.answers)) out.answers = out.answers.map(r => { const c = Object.assign({}, r); delete c.token; return c; });
+  return out;
+}
+
 function broadcast(room) { room.lastActivity = now(); for (const p of allPlayers(room)) if (p.res) sseSend(p.res, viewFor(room, p)); }
 
 /* ============ سير اللعبة ============ */
@@ -348,6 +362,7 @@ function finishCase(room) {
     if (p.token === room.accused) continue;
     const sub = room.submissions.get(p.token);
     rows.push({
+      id: p.id, token: p.token,
       name: p.name, avatar: p.avatar,
       answer: sub ? sub.text : null,
       round: sub ? sub.round : null,
@@ -365,6 +380,10 @@ function finishCase(room) {
     answers: rows.sort((a, b) => (b.points - a.points)),
     history: room.history.map(h => { const w = nameOf(room, h.token); return { name: w.name, avatar: w.avatar, text: h.text, answer: h.answer, round: h.round }; }),
   };
+  /* المرشحين للتصحيح اليدوي: أي حد سلّم إجابة واتحسبت غلط */
+  room.lastResult.candidates = rows.filter(r => r.answer && !r.correct)
+    .map(r => ({ token: r.token, id: r.id, name: r.name, avatar: r.avatar, text: r.answer, round: r.round }));
+  room.lastResult.credited = [];
   room.caseResults.push(room.lastResult);
   clearPause(room);
   room.readyNext = new Set();
@@ -661,6 +680,25 @@ module.exports = {
       room.decided.add(p.token);
       broadcast(room);
       maybeCloseDecide(room);
+      return R(200, { ok: true });
+    }
+    if (A === 'creditGuess') {
+      if (room.phase !== 'caseEnd') return R(400, { ok: false, error: 'مش وقتها' });
+      if (room.accused !== p.token) return R(403, { ok: false, error: 'المتّهم بس هو اللي يحسبها' });
+      const res = room.lastResult || {};
+      const cand = (res.candidates || []).find(c => c.id === String(b.target || ''));
+      if (!cand) return R(400, { ok: false, error: 'اللاعب ده مش في القايمة' });
+      res.credited = res.credited || [];
+      if (res.credited.includes(cand.token)) return R(400, { ok: false, error: 'محسوبة له خلاص' });
+      const w = room.players.get(cand.token);
+      if (!w) return R(400, { ok: false, error: 'اللاعب مش موجود' });
+      const pts = tierPoints(cand.round || room.settings.rounds);
+      w.score += pts; w.stat.solved++;
+      res.credited.push(cand.token);
+      const row = (res.answers || []).find(r => r.token === cand.token);
+      if (row) { row.correct = true; row.points = pts; row.manual = true; }
+      res.answers = (res.answers || []).slice().sort((x, y) => y.points - x.points);
+      broadcast(room);
       return R(200, { ok: true });
     }
     if (A === 'readyNext') {
