@@ -14,7 +14,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 /* مسافة شريط إشعارات الموبايل — نفس منطق باقي الألعاب */
 :root{ --safe-top: env(safe-area-inset-top, 0px) }
-@media (max-width:820px){ :root{ --safe-top: max(env(safe-area-inset-top, 0px), 40px) } }
+/* الرقم الثابت اتشال — safe-top.js بيقيس القيمة الحقيقية من الجهاز */
 body{margin:0;min-height:100vh;color:var(--ink);font-family:'Cairo',system-ui,sans-serif;
   background:
     radial-gradient(900px 420px at 50% -120px,#1c2c4e 0%,transparent 62%),

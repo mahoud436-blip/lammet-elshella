@@ -595,9 +595,28 @@ function showHelp() {
   ov.innerHTML = `<div class="help-card">
     <div class="help-hero"><img src="/img/jasoos.png" alt=""><h2>الجاسوس</h2><div class="sub">مين فيكم مش عارف الكلمة؟ 🕵️</div></div>
     <div class="help-body">${JASOOS_STEPS.map(([e, t, d]) => `<div class="help-step"><div class="help-num">${e}</div><div><h4>${t}</h4><p>${d}</p></div></div>`).join('')}</div>
-    <div class="help-foot"><label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label><button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button></div>
+    <div class="help-foot"><div class="safe-row">
+      <span>مسافة فوق شريط الإشعارات</span>
+      <span class="safe-ctl">
+        <button type="button" id="safe-minus" aria-label="أقل">−</button>
+        <b id="safe-val">0</b>
+        <button type="button" id="safe-plus" aria-label="أكتر">+</button>
+      </span>
+    </div>
+    <div class="safe-hint">لو محتوى اللعبة داخل تحت الساعة والبطارية، زوّدها. ولو في فراغ زيادة فوق، قلّلها.</div>
+    <label class="help-chk"><input type="checkbox" id="help-off"> متظهرش تاني في الجهاز ده</label><button class="btn primary big" id="help-ok">تمام، يلا نلعب 🚀</button></div>
   </div>`;
   document.body.appendChild(ov);
+  /* ظبط المسافة فوق — بتتحفظ على الجهاز ده لوحده */
+  (function () {
+    if (!window.SafeTop) return;
+    const vEl = $('#safe-val'); if (!vEl) return;
+    const show = () => { vEl.textContent = SafeTop.value + (SafeTop.isCustom() ? '' : '*'); };
+    show();
+    const bump = (d) => { SafeTop.set(SafeTop.value + d); show(); };
+    $('#safe-minus').onclick = (e) => { e.stopPropagation(); bump(-4); };
+    $('#safe-plus').onclick = (e) => { e.stopPropagation(); bump(4); };
+  })();
   const close = () => { if ($('#help-off') && $('#help-off').checked) LS.set('lamma_help_off_jasoos', true); ov.remove(); };
   $('#help-ok').onclick = close; ov.onclick = e => { if (e.target === ov) close(); };
 }
