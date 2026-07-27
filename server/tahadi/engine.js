@@ -6,6 +6,7 @@ const BANK = require('./bank');
 const HOST_GRACE_MS = parseInt(process.env.HOST_GRACE_MS || '45000', 10);
 const ROOM_TTL_MS = parseInt(process.env.ROOM_TTL_MS || String(90 * 60 * 1000), 10);
 const MAX_ROOMS = 300;
+const MIN_PLAYERS = 3;
 const MAX_PLAYERS = 12;
 const MAX_Q_PER_PLAYER = 20;
 const REVEAL_GRACE = 250;
@@ -467,7 +468,7 @@ module.exports = {
     if (A === 'startWriting') {
       if (!isHost(room, p)) return R(403, { ok: false, error: 'الهوست بس اللي يبدأ' });
       if (room.phase !== 'lobby') return R(400, { ok: false, error: 'مش في اللوبي' });
-      if (connectedPlayers(room).length < 2) return R(400, { ok: false, error: 'محتاجين لاعبين على الأقل' });
+      if (connectedPlayers(room).length < MIN_PLAYERS) return R(400, { ok: false, error: 'محتاجين ' + MIN_PLAYERS + ' لاعيبة على الأقل' });
       if (room.settings.cats.length < 1) return R(400, { ok: false, error: 'اختار كاتيجوري واحدة على الأقل' });
       if (qTotal(room) > MAX_Q_PER_PLAYER) return R(400, { ok: false, error: `كتير أوي! أقصى حاجة ${MAX_Q_PER_PLAYER} سؤال للاعب — قلل العدد أو الكاتيجوريز` });
       startWriting(room);

@@ -9,7 +9,7 @@ let allOk = true;
 
 for (const g of GAMES) {
   const src = fs.readFileSync('/home/claude/work/game/public/' + g + '/app.js', 'utf8');
-  const m = src.match(/function updPresence\(st\) \{[\s\S]*?\n\}/);
+  const m = src.match(/let CHEAT_SEEN[\s\S]*?\nfunction updPresence\(st\) \{[\s\S]*?\n\}/);
   if (!m) { console.log('❌ ' + g + ': مالقيتش updPresence'); allOk = false; continue; }
 
   const dom = new JSDOM('<!DOCTYPE html><body><div id="app"></div></body>');
@@ -22,7 +22,8 @@ for (const g of GAMES) {
     esc: (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])),
     document: doc,
   };
-  const updPresence = new Function('$', 'esc', 'document', m[0] + '; return updPresence;')(ctx.$, ctx.esc, doc);
+  const updPresence = new Function('$', 'esc', 'Snd', 'DOOR_OUT', 'document', 'window',
+    m[0] + '; return updPresence;')(ctx.$, ctx.esc, { play() {} }, '<svg></svg>', doc, window);
 
   const header = () => '<div class="topbar">هيدر</div><div id="presence-bar" class="presence-bar hidden"></div>';
   const app = doc.getElementById('app');
