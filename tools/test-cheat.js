@@ -25,7 +25,7 @@ for (const g of GAMES) {
   const updPresence = new Function('$', 'esc', 'Snd', 'DOOR_OUT', 'document', 'window',
     m[0] + '; return updPresence;')(ctx.$, ctx.esc, { play() {} }, '<svg></svg>', doc, window);
 
-  const header = () => '<div class="topbar">هيدر</div><div id="presence-bar" class="presence-bar hidden"></div>';
+  const header = () => '<div class="topbar">هيدر</div>';
   const app = doc.getElementById('app');
   const PH = { conan: 'play', jasoos: 'play', lammaha: 'clue', tahadi: 'quiz' };
   const phase = PH[g];
@@ -44,6 +44,9 @@ for (const g of GAMES) {
 
   app.innerHTML = header();          /* رسمة جديدة بتمسح #app بالكامل */
   const survived = !!doc.getElementById('cheat-alert');
+  const bar = doc.getElementById('presence-bar');
+  const circlesLive = !!bar && bar.querySelectorAll('.pv').length === players.length
+    && [...bar.querySelectorAll('.av')].map(x => x.textContent).join('') === players.map(p => p.avatar).join('');
 
   updPresence(st);                   /* الحالة الجاية */
   const el = doc.getElementById('cheat-alert');
@@ -59,11 +62,12 @@ for (const g of GAMES) {
   updPresence({ phase: 'lobby', players });
   const goneLobby = !doc.getElementById('cheat-alert');
 
-  const ok = before && survived && inBody && /امسك غشاش/.test(text) && /Hossa/.test(text) && gone && goneLobby;
+  const ok = before && survived && circlesLive && inBody && /امسك غشاش/.test(text) && /Hossa/.test(text) && gone && goneLobby;
   if (!ok) allOk = false;
   console.log((ok ? '✅' : '❌') + ' ' + g.padEnd(8) +
     ' | ظهر: ' + (before ? '✔' : '✘') +
     ' | عاش بعد إعادة الرسم: ' + (survived ? '✔' : '✘') +
+    ' | الدواير باقية: ' + (circlesLive ? '✔' : '✘') +
     ' | في body: ' + (inBody ? '✔' : '✘') +
     ' | اختفى لما رجع: ' + (gone ? '✔' : '✘') +
     ' | اختفى برّه اللعبة: ' + (goneLobby ? '✔' : '✘'));
