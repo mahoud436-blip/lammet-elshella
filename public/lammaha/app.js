@@ -190,7 +190,7 @@ function header(sub) {
     <button class="btn sm ghost" id="mute-btn">${Snd.muted ? '🔇' : '🔊'}</button>
   </div>
   ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">' + DOOR_OUT + '</button>' : ''}
-  <div id="presence-bar" class="presence-bar hidden"></div>`;
+  `;
 }
 function bindHeader() {}
 document.addEventListener('click', async (e) => {
@@ -204,7 +204,15 @@ document.addEventListener('click', async (e) => {
 });
 let CHEAT_SEEN = '';   /* آخر مجموعة خارجين — عشان الصوت ما يتكررش */
 function updPresence(st) {
-  const el = $('#presence-bar'); if (!el) return;
+  /* الشريط بيتعلّق في body مش جوه #app — عشان إعادة رسم الشاشة ما تمسحوش */
+  let el = document.getElementById('presence-bar');
+  if (!el || el.parentElement !== document.body) {
+    if (el) el.remove();
+    el = document.createElement('div');
+    el.id = 'presence-bar';
+    el.className = 'presence-bar hidden';
+    document.body.appendChild(el);
+  }
   const show = st && (st.phase === 'clue' || st.phase === 'reveal');
   el.classList.toggle('hidden', !show);
   if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); CHEAT_SEEN = ''; return; }
