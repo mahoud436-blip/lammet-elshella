@@ -119,6 +119,7 @@ const Snd = {
 };
 
 /* ======================= الحالة ======================= */
+const API_BASE = '/api/tahadi';
 const S = {
   save: LS.get('tahadi_save', null),
   name: LS.get('tahadi_name', ''),
@@ -168,6 +169,17 @@ setInterval(() => {
   if (!S.save || !S.es) return;
   if (Date.now() - S.lastMsg > 40000) { openStream(); }
 }, 10000);
+/* بلّغ السيرفر إنك خرجت — بـsendBeacon عشان يوصل حتى والصفحة بتتجمّد */
+function sendAway(away) {
+  if (!S.save) return;
+  const payload = JSON.stringify({ code: S.save.code, token: S.save.token, action: 'presence', away: !!away });
+  if (away && navigator.sendBeacon) {
+    try {
+      if (navigator.sendBeacon(API_BASE + '/action', new Blob([payload], { type: 'application/json' }))) return;
+    } catch (e) {}
+  }
+  act('presence', { away: !!away });
+}
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && S.save) {
     if (!S.es || S.es.readyState === 2 || Date.now() - S.lastMsg > 20000) openStream();
@@ -218,9 +230,10 @@ document.addEventListener('click', async (e) => {
   }
 });
 /* مراقبة الحضور: لو حد نزّل اللعبة تحت أو فتح حاجة تانية — الكل يشوف ❗ */
-function sendPresence(away) { if (S.save) act('presence', { away: !!away }); }
+function sendPresence(away) { sendAway(away); }
 document.addEventListener('visibilitychange', () => sendPresence(document.visibilityState !== 'visible'));
 window.addEventListener('blur', () => sendPresence(true));
+window.addEventListener('pagehide', () => sendPresence(true));
 window.addEventListener('focus', () => sendPresence(false));
 let CHEAT_SEEN = '';   /* آخر مجموعة خارجين — عشان الصوت ما يتكررش */
 function updPresence(st) {

@@ -487,6 +487,4 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-to
   margin-inline-start:-6px;background:#2a0f14;border-inline-start:2px solid var(--coral);
   border-top:2px solid var(--coral);transform:rotate(45deg)}
 @keyframes cheatPop{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
-/* الأفاتار نفسه بينبض عشان تعرف مين */
-.presence-bar .pv.away{animation:pvPulse 1.1s ease-in-out infinite}
-@keyframes pvPulse{0%,100%{box-shadow:0 0 0 0 #ff6b5a00}50%{box-shadow:0 0 0 4px #ff6b5a55}}
+/* النبض الأصلي pulseAway فوق كفاية — القاعدة دي كانت بتلغيه */

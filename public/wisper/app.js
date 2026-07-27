@@ -99,6 +99,7 @@ const Snd = {
 };
 
 /* ======================= الحالة ======================= */
+const API_BASE = '/api/wisper';
 const S = {
   save: LS.get('wisper_save', null),
   name: LS.get('wisper_name', LS.get('tahadi_name', '')),
@@ -140,12 +141,27 @@ function openStream() {
   S.lastMsg = Date.now();
 }
 setInterval(() => { if (S.save && S.es && Date.now() - S.lastMsg > 40000) openStream(); }, 10000);
+/* بلّغ السيرفر إنك خرجت — بـsendBeacon عشان يوصل حتى والصفحة بتتجمّد */
+function sendAway(away) {
+  if (!S.save) return;
+  const payload = JSON.stringify({ code: S.save.code, token: S.save.token, action: 'presence', away: !!away });
+  if (away && navigator.sendBeacon) {
+    try {
+      if (navigator.sendBeacon(API_BASE + '/action', new Blob([payload], { type: 'application/json' }))) return;
+    } catch (e) {}
+  }
+  act('presence', { away: !!away });
+}
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && S.save) {
     if (!S.es || S.es.readyState === 2 || Date.now() - S.lastMsg > 20000) openStream();
     grabWake();
   }
 });
+document.addEventListener('visibilitychange', () => sendAway(document.visibilityState !== 'visible'));
+window.addEventListener('blur', () => sendAway(true));
+window.addEventListener('pagehide', () => sendAway(true));
+window.addEventListener('focus', () => sendAway(false));
 function grabWake() {
   if (!('wakeLock' in navigator)) return;
   if (S.st && S.st.phase !== 'lobby' && S.st.phase !== 'gameover') navigator.wakeLock.request('screen').then(w => { S.wake = w; }).catch(() => {});

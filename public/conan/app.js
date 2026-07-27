@@ -110,6 +110,7 @@ const Snd = {
   toggle() { this.muted = !this.muted; LS.set('conan_mute', this.muted); toast(this.muted ? 'الصوت اتقفل 🔇' : 'الصوت اتفتح 🔊'); }
 };
 
+const API_BASE = '/api/conan';
 const S = {
   save: LS.get('conan_save', null),
   name: LS.get('conan_name', LS.get('tahadi_name', '')),
@@ -154,13 +155,25 @@ function openStream() {
   S.lastMsg = Date.now();
 }
 setInterval(() => { if (S.save && S.es && Date.now() - S.lastMsg > 40000) openStream(); }, 10000);
+/* بلّغ السيرفر إنك خرجت — بـsendBeacon عشان يوصل حتى والصفحة بتتجمّد */
+function sendAway(away) {
+  if (!S.save) return;
+  const payload = JSON.stringify({ code: S.save.code, token: S.save.token, action: 'presence', away: !!away });
+  if (away && navigator.sendBeacon) {
+    try {
+      if (navigator.sendBeacon(API_BASE + '/action', new Blob([payload], { type: 'application/json' }))) return;
+    } catch (e) {}
+  }
+  act('presence', { away: !!away });
+}
 document.addEventListener('visibilitychange', () => {
   const away = document.visibilityState !== 'visible';
-  if (S.save) act('presence', { away });
+  sendAway(away);
   if (!away && S.save) { if (!S.es || S.es.readyState === 2 || Date.now() - S.lastMsg > 20000) openStream(); grabWake(); }
 });
-window.addEventListener('blur', () => { if (S.save) act('presence', { away: true }); });
-window.addEventListener('focus', () => { if (S.save) act('presence', { away: false }); });
+window.addEventListener('blur', () => sendAway(true));
+window.addEventListener('pagehide', () => sendAway(true));
+window.addEventListener('focus', () => sendAway(false));
 function grabWake() { if (!('wakeLock' in navigator)) return; if (S.st && S.st.phase !== 'lobby' && S.st.phase !== 'gameover') navigator.wakeLock.request('screen').then(w => { S.wake = w; }).catch(() => {}); }
 function leaveLocal() { if (S.es) { try { S.es.close(); } catch (e) {} S.es = null; } S.save = null; LS.del('conan_save'); S.st = null; S.sig = ''; const po = $('#pause-ov'); if (po) po.remove(); renderHome(); }
 
