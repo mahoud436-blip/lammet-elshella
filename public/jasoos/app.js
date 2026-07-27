@@ -99,6 +99,7 @@ const Snd = {
   ensure() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
   tone(f, t0, dur, type, vol) { if (this.muted || !this.ctx) return; const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.type = type || 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || .18, t0 + .02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.connect(g).connect(this.ctx.destination); o.start(t0); o.stop(t0 + dur + .05); },
   play(name) { this.ensure(); if (!this.ctx || this.muted) return; const t = this.ctx.currentTime;
+    if (name === 'alert') { this.tone(880, t, .06, 'square', .06); this.tone(1245, t + .08, .07, 'square', .055); }
     if (name === 'pick') this.tone(440, t, .08, 'square', .1);
     if (name === 'turn') { this.tone(392, t, .1); this.tone(523, t + .1, .14); }
     if (name === 'word') this.tone(660, t, .09, 'triangle', .12);
@@ -176,23 +177,41 @@ document.addEventListener('click', async (e) => {
   else if (t.id === 'force-play') { if (await uiConfirm('تكمّلوا من غير اللي متأخر؟ اللعبة هتمشي من غيره وسكوره بيفضل محسوب', { emoji: '⏭️', title: 'كمّلوا من غيره', okLabel: 'كمّل', cancelLabel: 'استنى' })) act('forceNext'); }
   else if (t.id === 'leave-fab') { if (!await uiConfirm('تخرج من الروم؟ سكورك هيفضل محسوب', { emoji: DOOR_OUT, title: 'خروج', okLabel: 'اخرج', cancelLabel: 'استنى' })) return; await act('leave'); leaveLocal(); }
 });
+let CHEAT_SEEN = '';   /* آخر مجموعة خارجين — عشان الصوت ما يتكررش */
 function updPresence(st) {
   const el = $('#presence-bar'); if (!el) return;
   const show = st && (st.phase === 'play' || st.phase === 'vote' || st.phase === 'spyGuess');
   el.classList.toggle('hidden', !show);
-  if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); return; }
+  if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); CHEAT_SEEN = ''; return; }
   el.innerHTML = st.players.map(p => {
     const cls = p.left ? 'gone' : (!p.connected ? 'off' : (p.away ? 'away' : 'here'));
     const badge = p.left ? DOOR_OUT : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
-    return `<span class="pv ${cls}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
+    return `<span class="pv ${cls}" data-pid="${p.id}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
   }).join('');
-  /* تحذير الغشاش: مين خارج من اللعبة دلوقتي */
+  /* تحذير الغشاش: بينبثق من أفاتار اللي خارج من اللعبة */
   const away = st.players.filter(p => p.away && !p.left && p.connected);
   let cap = $('#cheat-alert');
-  if (!away.length) { if (cap) cap.remove(); return; }
+  if (!away.length) { if (cap) cap.remove(); CHEAT_SEEN = ''; return; }
   if (!cap) { cap = document.createElement('div'); cap.id = 'cheat-alert'; cap.className = 'cheat-alert'; document.body.appendChild(cap); }
   cap.innerHTML = `<div class="ca-top">🚨 امسك غشاش!</div>
     <div class="ca-names">${away.map(p => `<span class="ca-one">${p.avatar} ${esc(p.name)} <b>بيدوّر برّه 🔍</b></span>`).join('')}</div>`;
+
+  /* ثبّته تحت أفاتار أول واحد، والذيل يشاور عليه */
+  const pv = el.querySelector('.pv[data-pid="' + away[0].id + '"]');
+  if (pv) {
+    const r = pv.getBoundingClientRect();
+    const w = cap.offsetWidth || 200;
+    const cx = r.left + r.width / 2;
+    const left = Math.max(8, Math.min(cx - w / 2, window.innerWidth - w - 8));
+    cap.style.left = left + 'px';
+    cap.style.top = (r.bottom + 11) + 'px';
+    cap.style.transform = 'none';
+    cap.style.setProperty('--tail', (cx - left) + 'px');
+  } else { cap.style.left = '50%'; cap.style.transform = 'translateX(-50%)'; cap.style.setProperty('--tail', '50%'); }
+
+  /* صوت مرة واحدة بس لما حد جديد يخرج */
+  const ids = away.map(p => p.id).sort().join(',');
+  if (ids !== CHEAT_SEEN) { CHEAT_SEEN = ids; try { Snd.play('alert'); } catch (e) {} }
 }
 
 function renderHome(prefillCode) {

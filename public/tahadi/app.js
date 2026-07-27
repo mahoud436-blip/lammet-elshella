@@ -107,6 +107,7 @@ const Snd = {
   play(name) {
     this.ensure(); if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
+    if (name === 'alert') { this.tone(880, t, .06, 'square', .06); this.tone(1245, t + .08, .07, 'square', .055); }
     if (name === 'pick') this.tone(520, t, .09, 'square', .12);
     if (name === 'q') { this.tone(392, t, .12); this.tone(523, t + .12, .16); }
     if (name === 'ok') { [523, 659, 784].forEach((f, i) => this.tone(f, t + i * .09, .14)); }
@@ -221,24 +222,42 @@ function sendPresence(away) { if (S.save) act('presence', { away: !!away }); }
 document.addEventListener('visibilitychange', () => sendPresence(document.visibilityState !== 'visible'));
 window.addEventListener('blur', () => sendPresence(true));
 window.addEventListener('focus', () => sendPresence(false));
+let CHEAT_SEEN = '';   /* آخر مجموعة خارجين — عشان الصوت ما يتكررش */
 function updPresence(st) {
   const el = $('#presence-bar');
   if (!el) return;
   const show = st && (st.phase === 'writing' || st.phase === 'quiz');
   el.classList.toggle('hidden', !show);
-  if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); return; }
+  if (!show) { const c = $('#cheat-alert'); if (c) c.remove(); CHEAT_SEEN = ''; return; }
   el.innerHTML = st.players.map(p => {
     const cls = p.left ? 'gone' : (!p.connected ? 'off' : (p.away ? 'away' : 'here'));
     const badge = p.left ? DOOR_OUT : (!p.connected ? '⏳' : (p.away ? '❗' : ''));
-    return `<span class="pv ${cls}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
+    return `<span class="pv ${cls}" data-pid="${p.id}" title="${esc(p.name)}${p.away ? ' — خرج من اللعبة!' : ''}"><span class="av">${p.avatar}</span>${badge ? `<span class="bd">${badge}</span>` : ''}</span>`;
   }).join('');
-  /* تحذير الغشاش: مين خارج من اللعبة دلوقتي */
+  /* تحذير الغشاش: بينبثق من أفاتار اللي خارج من اللعبة */
   const away = st.players.filter(p => p.away && !p.left && p.connected);
   let cap = $('#cheat-alert');
-  if (!away.length) { if (cap) cap.remove(); return; }
+  if (!away.length) { if (cap) cap.remove(); CHEAT_SEEN = ''; return; }
   if (!cap) { cap = document.createElement('div'); cap.id = 'cheat-alert'; cap.className = 'cheat-alert'; document.body.appendChild(cap); }
   cap.innerHTML = `<div class="ca-top">🚨 امسك غشاش!</div>
     <div class="ca-names">${away.map(p => `<span class="ca-one">${p.avatar} ${esc(p.name)} <b>بيدوّر برّه 🔍</b></span>`).join('')}</div>`;
+
+  /* ثبّته تحت أفاتار أول واحد، والذيل يشاور عليه */
+  const pv = el.querySelector('.pv[data-pid="' + away[0].id + '"]');
+  if (pv) {
+    const r = pv.getBoundingClientRect();
+    const w = cap.offsetWidth || 200;
+    const cx = r.left + r.width / 2;
+    const left = Math.max(8, Math.min(cx - w / 2, window.innerWidth - w - 8));
+    cap.style.left = left + 'px';
+    cap.style.top = (r.bottom + 11) + 'px';
+    cap.style.transform = 'none';
+    cap.style.setProperty('--tail', (cx - left) + 'px');
+  } else { cap.style.left = '50%'; cap.style.transform = 'translateX(-50%)'; cap.style.setProperty('--tail', '50%'); }
+
+  /* صوت مرة واحدة بس لما حد جديد يخرج */
+  const ids = away.map(p => p.id).sort().join(',');
+  if (ids !== CHEAT_SEEN) { CHEAT_SEEN = ids; try { Snd.play('alert'); } catch (e) {} }
 }
 
 /* ======================= شاشة البداية ======================= */
