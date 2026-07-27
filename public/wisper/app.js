@@ -1,13 +1,26 @@
 
-/* أيقونات الباب — باب مفتوح وسهم بيوضّح داخل ولا خارج */
-const DOOR_OUT = '<svg class="ico-door" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-  '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<path d="M18.5 12H10m0 0 3-3m-3 3 3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<circle cx="8.4" cy="12" r=".95" fill="currentColor"/></svg>';
-const DOOR_IN = '<svg class="ico-door" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-  '<path d="M10 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<path d="M5.5 12H14m0 0-3-3m3 3-3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<circle cx="16.4" cy="12" r=".95" fill="currentColor"/></svg>';
+/* أيقونات الباب — باب خشبي مفتوح وسهم أبيض يوضّح خارج ولا داخل */
+const DOOR_OUT = '<svg class="ico-door" viewBox="0 0 24 24" aria-hidden="true">' +
+  /* إطار الباب */
+  '<path d="M16 3h4.6v18H16" fill="none" stroke="#C98A4B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>' +
+  /* الدرفة الخشب مفتوحة لبرّه */
+  '<path d="M16 3.1 10.9 5.7v12.6L16 20.9z" fill="#B5793F" stroke="#8A5527" stroke-width="1.1" stroke-linejoin="round"/>' +
+  '<path d="M13.4 6.9v10.2" stroke="#8A5527" stroke-width=".8" opacity=".7"/>' +
+  /* المقبض */
+  '<circle cx="12.4" cy="12" r=".85" fill="#F4E3C8"/>' +
+  /* سهم خروج أبيض */
+  '<path d="M8.4 12H2.4m0 0 2.5-2.5M2.4 12l2.5 2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
+const DOOR_IN = '<svg class="ico-door" viewBox="0 0 24 24" aria-hidden="true">' +
+  /* إطار الباب */
+  '<path d="M16 3h4.6v18H16" fill="none" stroke="#C98A4B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>' +
+  /* الدرفة الخشب مفتوحة تستقبلك */
+  '<path d="M16 3.1 10.9 5.7v12.6L16 20.9z" fill="#B5793F" stroke="#8A5527" stroke-width="1.1" stroke-linejoin="round"/>' +
+  '<path d="M13.4 6.9v10.2" stroke="#8A5527" stroke-width=".8" opacity=".7"/>' +
+  '<circle cx="12.4" cy="12" r=".85" fill="#F4E3C8"/>' +
+  /* سهم دخول أبيض — داخل ناحية الباب */
+  '<path d="M2.4 12h6m0 0L5.9 9.5M8.4 12l-2.5 2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
 /* حبر سري — واجهة اللعبة (لمّة الشلة) */
 'use strict';
 
@@ -154,7 +167,7 @@ function header(sub) {
     <button class="btn sm ghost" id="home-btn">🏠</button>
     <button class="btn sm ghost" id="mute-btn">${Snd.muted ? '🔇' : '🔊'}</button>
   </div>
-  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">${DOOR_OUT}</button>' : ''}`;
+  ${S.save ? '<button class="leave-fab" id="leave-fab" title="اخرج من الروم">' + DOOR_OUT + '</button>' : ''}`;
 }
 function bindHeader() {}
 /* تفويض عام: الأزرار شغالة في كل الشاشات دايمًا */
